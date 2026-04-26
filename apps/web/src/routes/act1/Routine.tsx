@@ -119,7 +119,7 @@ export default function Routine() {
                 You've seen the long game. Let's pick a moment and style you for it.
               </p>
               <Link to="/event" className="btn-primary mt-4 w-full">
-                Start Act 2 — Today You <ArrowRight className="h-4 w-4" />
+                Start Act 2 - Today You <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/share" className="text-xs text-white/65 hover:text-white/90 mt-3 inline-flex items-center gap-1 mx-auto justify-center w-full">
                 Skip Act 2 · save my Glow Card now

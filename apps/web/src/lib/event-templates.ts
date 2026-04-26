@@ -75,7 +75,7 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
   casual: {
     key: "casual",
     title: "Casual Friday",
-    blurb: "Effortless, but not accidentally — confident neutrals with a wink.",
+    blurb: "Effortless, but not accidentally - confident neutrals with a wink.",
     emoji: "☕",
     hairTemplateId: "messy_bun",
     makeupLookId: "your_skin_better",

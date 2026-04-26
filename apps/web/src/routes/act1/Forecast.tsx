@@ -31,7 +31,7 @@ export default function Forecast() {
         <h2 className="display text-3xl">Your future, two ways</h2>
       </div>
       <p className="text-xs text-white/70">
-        Drag the handle — same you, two timelines, +10 years.
+        Drag the handle - same you, two timelines, +10 years.
       </p>
 
       <div className="mt-3">

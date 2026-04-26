@@ -2,14 +2,14 @@
 
 > One selfie. See your future skin. Style your today look. Powered by Perfect Corp's YouCam AI.
 
-**Pegasus Startup World Cup × Perfect Corp Hackathon entry — May 2026.**
+**Pegasus Startup World Cup × Perfect Corp Hackathon entry - May 2026.**
 
 ## What it does
 
 Two acts in one journey:
 
-1. **Future You** — HD Skin Analysis + Aging Generator + Skin Simulation produce a draggable split-screen of your face 5/10 years from now: neglected on one side, cared-for on the other. Followed by a personalized routine.
-2. **Today You** — Pick an upcoming moment (Date Night, Job Interview, Wedding Guest, Vacation, Casual Friday). Your skin tone drives a coordinated head-to-toe look: hairstyle + makeup + outfit + accessories — all shoppable.
+1. **Future You** - HD Skin Analysis + Aging Generator + Skin Simulation produce a draggable split-screen of your face 5/10 years from now: neglected on one side, cared-for on the other. Followed by a personalized routine.
+2. **Today You** - Pick an upcoming moment (Date Night, Job Interview, Wedding Guest, Vacation, Casual Friday). Your skin tone drives a coordinated head-to-toe look: hairstyle + makeup + outfit + accessories - all shoppable.
 
 A single shareable "Glow Card" combines both acts.
 
