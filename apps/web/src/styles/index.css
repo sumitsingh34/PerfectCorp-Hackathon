@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body, #root { height: 100%; }
+body {
+  font-family: theme("fontFamily.sans");
+  color: #f5f5f7;
+  background-color: theme("colors.ink.950");
+  background-image: theme("backgroundImage.gradient-aurora");
+  background-attachment: fixed;
+  background-size: 100% 100%;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: -0.01em;
+}
+h1, h2, h3, .display { color: #ffffff; letter-spacing: -0.02em; }
+p, label, li, a { color: rgba(245, 245, 247, 0.88); }
+.text-muted { color: rgba(245, 245, 247, 0.60); }
+
+@layer components {
+  .glass {
+    @apply bg-ink-900/85 backdrop-blur-xl border border-white/10 rounded-2xl;
+  }
+  .screen-header {
+    @apply flex items-center gap-3 mb-4;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold
+           bg-glow-500 text-white shadow-glow transition active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 font-medium
+           bg-white/10 text-white hover:bg-white/20 transition active:scale-[0.98];
+  }
+  .display {
+    @apply font-display tracking-tight;
+  }
+  .pad-screen {
+    @apply px-5 pb-[calc(theme(spacing.5)+var(--safe-bottom))] pt-[calc(theme(spacing.5)+var(--safe-top))];
+  }
+  .skeleton {
+    @apply bg-gradient-to-r from-white/5 via-white/10 to-white/5 bg-[length:200%_100%] animate-shimmer rounded-xl;
+  }
+}
+
+/* Hide scrollbars on horizontal carousels */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }

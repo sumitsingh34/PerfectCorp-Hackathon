@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b2e3a"/>
+      <stop offset="100%" stop-color="#1a1320"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="42%" r="38%">
+      <stop offset="0%" stop-color="#c89b7b"/>
+      <stop offset="100%" stop-color="#7a5641"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <ellipse cx="300" cy="320" rx="170" ry="220" fill="url(#face)"/>
+  <path d="M210 280 q15 -8 30 0 M360 280 q15 -8 30 0" stroke="#3a2418" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M260 290 q-25 -3 -45 7 M340 290 q25 -3 45 7" stroke="#5a4030" stroke-width="2" fill="none" opacity="0.7"/>
+  <ellipse cx="240" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <ellipse cx="360" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <path d="M210 365 q30 12 60 0 M330 365 q30 12 60 0" stroke="#3a2418" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M270 410 q30 8 60 0" stroke="#5a3020" stroke-width="2" fill="none"/>
+  <path d="M260 470 q40 18 80 0" stroke="#7a3030" stroke-width="3" fill="none"/>
+  <path d="M210 530 q40 -5 80 5 M310 530 q40 10 80 -5" stroke="#5a4030" stroke-width="1.5" fill="none" opacity="0.6"/>
+  <text x="300" y="760" font-family="Inter,sans-serif" font-size="24" font-weight="600" fill="#ffffff" text-anchor="middle" opacity="0.85">+10 yrs · without care</text>
+</svg>

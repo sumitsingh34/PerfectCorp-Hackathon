@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5a4a4a"/>
+      <stop offset="100%" stop-color="#221820"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="42%" r="40%">
+      <stop offset="0%" stop-color="#e8c2a4"/>
+      <stop offset="100%" stop-color="#8a684f"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="rgba(255,200,150,0.35)"/>
+      <stop offset="100%" stop-color="rgba(255,200,150,0)"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <rect width="600" height="800" fill="url(#glow)"/>
+  <ellipse cx="300" cy="320" rx="172" ry="222" fill="url(#face)"/>
+  <ellipse cx="240" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <ellipse cx="360" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <ellipse cx="240" cy="324" rx="3" ry="2" fill="#ffffff" opacity="0.8"/>
+  <ellipse cx="360" cy="324" rx="3" ry="2" fill="#ffffff" opacity="0.8"/>
+  <path d="M270 410 q30 6 60 0" stroke="#5a3020" stroke-width="1.5" fill="none"/>
+  <path d="M255 470 q45 22 90 0" stroke="#a83838" stroke-width="3.5" fill="none"/>
+  <text x="300" y="760" font-family="Inter,sans-serif" font-size="24" font-weight="600" fill="#ffffff" text-anchor="middle" opacity="0.9">+10 yrs · with care</text>
+</svg>

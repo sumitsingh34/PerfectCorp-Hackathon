@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.vite/
+.cache/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Deno
+.deno/
+
+# Test artifacts
+test-selfies/
+*.test.png
+*.test.jpg
+
+# Plan (per user instruction — keep local only)
+plan.md
+*.md

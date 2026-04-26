@@ -1,0 +1,14 @@
+{
+  "name": "glow-forecast",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Glow Forecast — Pegasus × Perfect Corp Hackathon entry. See your future skin and style your today look from one selfie.",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "preview": "pnpm --filter web preview",
+    "proxy:dev": "pnpm --filter proxy dev",
+    "lint": "pnpm --filter web lint"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

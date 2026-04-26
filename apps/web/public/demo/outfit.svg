@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a2030"/>
+      <stop offset="100%" stop-color="#0e0808"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="50%" r="40%">
+      <stop offset="0%" stop-color="#e8c2a4"/>
+      <stop offset="100%" stop-color="#8a684f"/>
+    </radialGradient>
+    <linearGradient id="dress" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7a1530"/>
+      <stop offset="100%" stop-color="#4a0820"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <path d="M150 280 q-10 -180 150 -210 q160 30 150 210 q-30 -110 -150 -120 q-120 10 -150 120z" fill="#3a1f10"/>
+  <ellipse cx="300" cy="270" rx="120" ry="150" fill="url(#face)"/>
+  <path d="M240 380 q60 60 120 0 l50 80 l-30 280 l-160 0 l-30 -280z" fill="url(#dress)"/>
+  <path d="M250 480 q50 12 100 0" stroke="#3a0010" stroke-width="2" fill="none" opacity="0.5"/>
+  <text x="300" y="760" font-family="Inter,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle" opacity="0.85">Burgundy Slip Dress</text>
+</svg>

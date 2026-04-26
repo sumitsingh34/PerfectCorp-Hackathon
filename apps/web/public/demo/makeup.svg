@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5e2638"/>
+      <stop offset="100%" stop-color="#1a0a14"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="42%" r="40%">
+      <stop offset="0%" stop-color="#e8c2a4"/>
+      <stop offset="100%" stop-color="#8a684f"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <ellipse cx="300" cy="320" rx="170" ry="220" fill="url(#face)"/>
+  <path d="M205 320 q35 -22 70 0 M325 320 q35 -22 70 0" fill="#a8786a" opacity="0.4"/>
+  <ellipse cx="240" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <ellipse cx="360" cy="330" rx="14" ry="9" fill="#2a1810"/>
+  <path d="M210 320 q30 -10 60 0 M330 320 q30 -10 60 0" stroke="#1a0810" stroke-width="2.5" fill="none"/>
+  <path d="M260 470 q40 20 80 0 q-15 18 -40 18 q-25 0 -40 -18z" fill="#a01838"/>
+  <text x="300" y="760" font-family="Inter,sans-serif" font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle" opacity="0.85">Ember Glow makeup</text>
+</svg>
