@@ -7,6 +7,7 @@ dist/
 build/
 .vite/
 .cache/
+*.tsbuildinfo
 
 # Environment & secrets
 .env
@@ -38,3 +39,4 @@ test-selfies/
 # Plan (per user instruction — keep local only)
 plan.md
 *.md
+!README.md
