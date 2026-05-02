@@ -32,7 +32,10 @@ export function imageUrlsByName(entries: ZipEntry[]): Record<string, string> {
     else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
     else if (lower.endsWith(".webp")) mime = "image/webp";
     if (!mime) continue;
-    const blob = new Blob([e.data], { type: mime });
+    // Copy into a fresh Uint8Array so TS sees a Uint8Array<ArrayBuffer>, not <ArrayBufferLike>.
+    const buf = new ArrayBuffer(e.data.byteLength);
+    new Uint8Array(buf).set(e.data);
+    const blob = new Blob([buf], { type: mime });
     out[e.name] = URL.createObjectURL(blob);
     // Also key by basename for easier lookup.
     const base = e.name.split("/").pop() ?? e.name;
