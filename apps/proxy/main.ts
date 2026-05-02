@@ -13,7 +13,7 @@
  * Local dev:  deno task dev
  */
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 
 const YOUCAM_BASE = Deno.env.get("YOUCAM_BASE") ?? "https://yce-api-01.makeupar.com";
@@ -114,20 +114,14 @@ function headersToObject(h: unknown): Record<string, string> {
   return out;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function upstreamErrorResponse(label: string, up: { status: number; json: Json; text: string }): Response {
+// deno-lint-ignore no-explicit-any
+function upstreamError(c: Context, label: string, up: { status: number; json: Json; text: string }): any {
   console.error(`[proxy] ${label} upstream ${up.status}:`, up.text.slice(0, 500));
   const body =
     up.json && typeof up.json === "object"
-      ? up.json
+      ? (up.json as Record<string, unknown>)
       : { error: `upstream ${up.status}`, detail: up.text.slice(0, 500) };
-  return jsonResponse(body, up.status || 502);
+  return c.json(body, (up.status || 502) as 502);
 }
 
 app.post("/api/upload/:feature", async (c) => {
@@ -136,7 +130,7 @@ app.post("/api/upload/:feature", async (c) => {
   if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
   const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/file/${feature}`, { method: "POST", body });
-  if (!up.ok) return upstreamErrorResponse("upload", up);
+  if (!up.ok) return upstreamError(c, "upload", up);
 
   const inner = unwrap(up.json);
   const rawFiles = Array.isArray(inner.files) ? (inner.files as Array<Record<string, unknown>>) : [];
@@ -152,9 +146,9 @@ app.post("/api/upload/:feature", async (c) => {
   });
   if (files.length === 0) {
     console.error("[proxy] upload: empty files array; raw=", up.text.slice(0, 500));
-    return jsonResponse({ error: "upstream returned no upload targets", upstream: inner }, 502);
+    return c.json({ error: "upstream returned no upload targets", upstream: inner }, 502);
   }
-  return jsonResponse({ files });
+  return c.json({ files });
 });
 
 app.post("/api/task/:feature", async (c) => {
@@ -163,15 +157,15 @@ app.post("/api/task/:feature", async (c) => {
   if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
   const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/task/${feature}`, { method: "POST", body });
-  if (!up.ok) return upstreamErrorResponse("task-create", up);
+  if (!up.ok) return upstreamError(c, "task-create", up);
 
   const inner = unwrap(up.json);
   const task_id = typeof inner.task_id === "string" ? inner.task_id : "";
   if (!task_id) {
     console.error("[proxy] task-create: missing task_id; raw=", up.text.slice(0, 500));
-    return jsonResponse({ error: "upstream returned no task_id", upstream: inner }, 502);
+    return c.json({ error: "upstream returned no task_id", upstream: inner }, 502);
   }
-  return jsonResponse({ task_id });
+  return c.json({ task_id });
 });
 
 app.get("/api/task/:feature/:id", async (c) => {
@@ -183,7 +177,7 @@ app.get("/api/task/:feature/:id", async (c) => {
     `${YOUCAM_BASE}/s2s/v2.0/task/${feature}/${encodeURIComponent(id)}`,
     { method: "GET" },
   );
-  if (!up.ok) return upstreamErrorResponse("task-poll", up);
+  if (!up.ok) return upstreamError(c, "task-poll", up);
 
   // Inner payload looks like { task_status: "running"|"success"|"error", results?, error?, progress? }
   // Lift task_status/error/progress to the top, and expose everything else under `result`.
@@ -195,10 +189,24 @@ app.get("/api/task/:feature/:id", async (c) => {
     progress?: number;
     [k: string]: unknown;
   };
-  return jsonResponse({
-    status: task_status ?? legacyStatus ?? "running",
+  const normalizedStatus = task_status ?? legacyStatus ?? "running";
+  // YouCam may stash failure info under a variety of keys when task_status === "error".
+  // Collect whatever's there into a single object so the client always gets a useful detail.
+  let normalizedError: unknown = error;
+  if (normalizedStatus === "error") {
+    const candidates: Record<string, unknown> = {};
+    if (error !== undefined) candidates.error = error;
+    for (const key of ["error_code", "error_id", "error_message", "message", "reason", "detail"]) {
+      if (rest[key] !== undefined) candidates[key] = rest[key];
+    }
+    if (Object.keys(candidates).length > 0) normalizedError = candidates;
+    if (!normalizedError) normalizedError = { raw: inner };
+    console.error("[proxy] task-poll error:", JSON.stringify(inner).slice(0, 500));
+  }
+  return c.json({
+    status: normalizedStatus,
     result: rest,
-    error,
+    error: normalizedError,
     progress,
   });
 });

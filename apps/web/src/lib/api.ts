@@ -30,7 +30,7 @@ export type TaskCreateResponse = {
 export type TaskStatus<TResult = unknown> = {
   status: "pending" | "running" | "success" | "error";
   result?: TResult;
-  error?: { code?: string; message?: string };
+  error?: unknown;
   /** Server-reported progress 0–100 if available. */
   progress?: number;
 };
@@ -39,6 +39,20 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
     super(message);
   }
+}
+
+function describeTaskError(err: unknown): string {
+  if (err == null) return "";
+  if (typeof err === "string") return err.slice(0, 200);
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    for (const k of ["error_message", "message", "error", "reason", "detail", "error_code", "error_id"]) {
+      const v = e[k];
+      if (typeof v === "string" && v) return v.slice(0, 200);
+    }
+    try { return JSON.stringify(e).slice(0, 200); } catch { return ""; }
+  }
+  return String(err).slice(0, 200);
 }
 
 async function jsonFetch<T>(input: string, init?: RequestInit): Promise<T> {
@@ -112,7 +126,12 @@ export async function pollTask<TResult = unknown>(
 
     if (status.status === "success") return status.result as TResult;
     if (status.status === "error") {
-      throw new ApiError(500, status.error?.message || "task failed", status.error);
+      const detail = describeTaskError(status.error);
+      throw new ApiError(
+        500,
+        detail ? `task failed — ${detail}` : "task failed",
+        status.error,
+      );
     }
 
     await new Promise((r) => setTimeout(r, delay));
