@@ -23,6 +23,99 @@ async function imageDimensions(url: string): Promise<{ width: number; height: nu
   });
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+// deno-lint-ignore no-explicit-any
+type FaceDetectorCtor = new (opts?: { fastMode?: boolean }) => {
+  detect: (src: CanvasImageSource) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+};
+
+async function detectFaceBox(source: HTMLCanvasElement | HTMLImageElement): Promise<Box | null> {
+  // deno-lint-ignore no-explicit-any
+  const Ctor = (globalThis as any).FaceDetector as FaceDetectorCtor | undefined;
+  if (!Ctor) return null;
+  try {
+    const det = new Ctor({ fastMode: true });
+    const faces = await det.detect(source);
+    if (!faces.length) return null;
+    // Pick the largest face if multiple.
+    const f = faces.reduce((a, b) =>
+      a.boundingBox.width * a.boundingBox.height >= b.boundingBox.width * b.boundingBox.height ? a : b,
+    );
+    return { x: f.boundingBox.x, y: f.boundingBox.y, width: f.boundingBox.width, height: f.boundingBox.height };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * YouCam's `error_src_face_too_small` triggers when the detected face
+ * occupies less than ~25% of the image's shorter side. This recrops so
+ * the face fills the upload, regardless of camera framing.
+ */
+async function cropForUpload(srcCanvas: HTMLCanvasElement): Promise<Blob> {
+  const { width: W, height: H } = srcCanvas;
+  const face = await detectFaceBox(srcCanvas);
+
+  let cropX: number, cropY: number, cropW: number, cropH: number;
+  if (face) {
+    // Pad ~80% of the face box on each side to keep some context (hair, neck).
+    const pad = Math.max(face.width, face.height) * 0.8;
+    cropX = Math.max(0, face.x - pad);
+    cropY = Math.max(0, face.y - pad);
+    const x2 = Math.min(W, face.x + face.width + pad);
+    const y2 = Math.min(H, face.y + face.height + pad);
+    cropW = x2 - cropX;
+    cropH = y2 - cropY;
+  } else {
+    // Center-crop matching the FaceGuide oval's footprint.
+    cropW = W * 0.65;
+    cropH = H * 0.80;
+    cropX = (W - cropW) / 2;
+    cropY = (H - cropH) * 0.42; // ellipse sits slightly above center
+  }
+
+  // Cap output to a sensible upload size.
+  const MAX_EDGE = 1280;
+  const scale = Math.min(1, MAX_EDGE / Math.max(cropW, cropH));
+  const outW = Math.round(cropW * scale);
+  const outH = Math.round(cropH * scale);
+
+  const out = document.createElement("canvas");
+  out.width = outW;
+  out.height = outH;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("canvas 2d context unavailable");
+  ctx.drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+
+  return await new Promise<Blob>((resolve, reject) =>
+    out.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("toBlob returned null"))),
+      "image/jpeg",
+      0.92,
+    ),
+  );
+}
+
+async function blobToCanvas(blob: Blob): Promise<HTMLCanvasElement> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("image decode failed"));
+      i.src = url;
+    });
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext("2d")?.drawImage(img, 0, 0);
+    return c;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export default function Capture() {
   const nav = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -72,15 +165,22 @@ export default function Capture() {
     // Mirror the snapshot so the photo matches what the user saw.
     ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
     ctx.drawImage(v, 0, 0);
-    const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.92));
-    if (!blob) return;
-    await commit(blob);
+    const cropped = await cropForUpload(canvas);
+    await commit(cropped);
   }
 
   async function pick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    await commit(f);
+    // Run the same face-aware crop on uploaded files so YouCam's
+    // `error_src_face_too_small` doesn't trip on landscape/group photos.
+    try {
+      const c = await blobToCanvas(f);
+      const cropped = await cropForUpload(c);
+      await commit(cropped);
+    } catch {
+      await commit(f);
+    }
   }
 
   async function commit(blob: Blob) {
