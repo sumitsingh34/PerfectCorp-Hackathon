@@ -405,7 +405,7 @@ export async function runAging(): Promise<AgingResult> {
   const selfie = selfieOrThrow();
   return withCache(`aging:${selfie.hash}`, async () => {
     const raw = await runFeature<{ src_file_id: string; ages: number[] }, unknown>(
-      "aging-generator",
+      "aging",
       toBlob(selfie),
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, ages: [5, 10] }),
@@ -458,7 +458,7 @@ export async function runHair(templateId: string, colorHex?: string): Promise<Ha
       { src_file_id: string; template_id: string; color?: string },
       unknown
     >(
-      "hairstyle-generator",
+      "hair-transfer",
       toBlob(selfie),
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, template_id: templateId, color: colorHex }),

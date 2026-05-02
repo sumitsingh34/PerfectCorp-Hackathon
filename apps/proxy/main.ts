@@ -50,22 +50,31 @@ app.use(
 
 app.get("/health", (c) => c.json({ ok: true, version: "0.1.0", upstream: YOUCAM_BASE }));
 
-/** Whitelist of feature slugs we forward. Locks the proxy to known endpoints. */
-const FEATURES = new Set([
-  "skin-analysis",
-  "skin-tone-analysis",
-  "aging-generator",
-  "skin-simulation",
-  "makeup-vto",
-  "hairstyle-generator",
-  "clothes-vto",
-  "bag-vto",
-  "jewelry-vto",
-  "shoes-vto",
-]);
+/**
+ * Feature whitelist with the upstream URL prefix each one lives under.
+ * Some features are on v2.0 (skin-analysis, makeup-vto, ...) and some are
+ * still on v1.0 (aging). Keep this in one place so adding a new feature
+ * is a single edit.
+ */
+const FEATURES: Record<string, { version: "v1.0" | "v2.0" }> = {
+  "skin-analysis": { version: "v2.0" },
+  "skin-tone-analysis": { version: "v2.0" },
+  "skin-simulation": { version: "v2.0" },
+  "makeup-vto": { version: "v2.0" },
+  "clothes-vto": { version: "v2.0" },
+  "bag-vto": { version: "v2.0" },
+  "jewelry-vto": { version: "v2.0" },
+  "shoes-vto": { version: "v2.0" },
+  "aging": { version: "v2.0" },
+  "hair-transfer": { version: "v2.0" },
+};
+
+function featureMeta(name: string): { version: string } | null {
+  return Object.prototype.hasOwnProperty.call(FEATURES, name) ? FEATURES[name] : null;
+}
 
 function ensureFeature(name: string): boolean {
-  return FEATURES.has(name);
+  return featureMeta(name) !== null;
 }
 
 type Json = unknown;
@@ -126,10 +135,11 @@ function upstreamError(c: Context, label: string, up: { status: number; json: Js
 
 app.post("/api/upload/:feature", async (c) => {
   const feature = c.req.param("feature");
-  if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
+  const meta = featureMeta(feature);
+  if (!meta) return c.json({ error: "unknown feature" }, 400);
   if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
-  const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/file/${feature}`, { method: "POST", body });
+  const up = await callUpstream(`${YOUCAM_BASE}/s2s/${meta.version}/file/${feature}`, { method: "POST", body });
   if (!up.ok) return upstreamError(c, "upload", up);
 
   const inner = unwrap(up.json);
@@ -153,10 +163,11 @@ app.post("/api/upload/:feature", async (c) => {
 
 app.post("/api/task/:feature", async (c) => {
   const feature = c.req.param("feature");
-  if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
+  const meta = featureMeta(feature);
+  if (!meta) return c.json({ error: "unknown feature" }, 400);
   if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
-  const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/task/${feature}`, { method: "POST", body });
+  const up = await callUpstream(`${YOUCAM_BASE}/s2s/${meta.version}/task/${feature}`, { method: "POST", body });
   if (!up.ok) return upstreamError(c, "task-create", up);
 
   const inner = unwrap(up.json);
@@ -171,10 +182,11 @@ app.post("/api/task/:feature", async (c) => {
 app.get("/api/task/:feature/:id", async (c) => {
   const feature = c.req.param("feature");
   const id = c.req.param("id");
-  if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
+  const meta = featureMeta(feature);
+  if (!meta) return c.json({ error: "unknown feature" }, 400);
   if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const up = await callUpstream(
-    `${YOUCAM_BASE}/s2s/v2.0/task/${feature}/${encodeURIComponent(id)}`,
+    `${YOUCAM_BASE}/s2s/${meta.version}/task/${feature}/${encodeURIComponent(id)}`,
     { method: "GET" },
   );
   if (!up.ok) return upstreamError(c, "task-poll", up);
