@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, Upload, RefreshCw, ArrowRight } from "lucide-react";
 import FaceGuide from "@/components/FaceGuide";
+import { useLiveFaceCheck } from "@/components/useLiveFaceCheck";
 import BackButton from "@/components/BackButton";
 import { useSession } from "@/store/session";
 import { sha256 } from "@/lib/cache";
@@ -59,20 +60,31 @@ async function cropForUpload(srcCanvas: HTMLCanvasElement): Promise<Blob> {
 
   let cropX: number, cropY: number, cropW: number, cropH: number;
   if (face) {
-    // Pad ~80% of the face box on each side to keep some context (hair, neck).
-    const pad = Math.max(face.width, face.height) * 0.8;
-    cropX = Math.max(0, face.x - pad);
-    cropY = Math.max(0, face.y - pad);
-    const x2 = Math.min(W, face.x + face.width + pad);
-    const y2 = Math.min(H, face.y + face.height + pad);
-    cropW = x2 - cropX;
-    cropH = y2 - cropY;
+    const faceShortFrac = Math.min(face.width / W, face.height / H);
+    if (faceShortFrac >= 0.28) {
+      // Face already fills enough of the frame. Don't crop — keep all margin
+      // so YouCam doesn't trip `err_src_face_out_of_bound`.
+      cropX = 0; cropY = 0; cropW = W; cropH = H;
+    } else {
+      // Face is small. Crop centered on face to ~40% face fraction, keeping
+      // at least 25% of the crop as non-face margin on every side.
+      const targetW = Math.max(face.width / 0.40, face.width * 2.5);
+      const targetH = Math.max(face.height / 0.45, face.height * 2.2);
+      const fcx = face.x + face.width / 2;
+      const fcy = face.y + face.height / 2;
+      cropW = Math.min(W, targetW);
+      cropH = Math.min(H, targetH);
+      cropX = Math.max(0, Math.min(W - cropW, fcx - cropW / 2));
+      cropY = Math.max(0, Math.min(H - cropH, fcy - cropH / 2));
+    }
   } else {
-    // Center-crop matching the FaceGuide oval's footprint.
-    cropW = W * 0.65;
-    cropH = H * 0.80;
+    // Center-crop with generous margins matching the FaceGuide oval, biased
+    // slightly upward (the oval sits above center). The 85%×90% box keeps
+    // ≥15% margin on every side even when the user fills the guide.
+    cropW = W * 0.85;
+    cropH = H * 0.90;
     cropX = (W - cropW) / 2;
-    cropY = (H - cropH) * 0.42; // ellipse sits slightly above center
+    cropY = H * 0.02;
   }
 
   // YouCam rejects too-small images (`error_below_min_image_size`).
@@ -134,6 +146,7 @@ export default function Capture() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setSelfie = useSession((s) => s.setSelfie);
+  const faceCheck = useLiveFaceCheck(videoRef, !preview && !!stream);
 
   // Start (or restart) the camera whenever we're in live mode (no preview yet).
   // When the user taps Retake, `preview` flips back to null and this effect
@@ -242,7 +255,24 @@ export default function Capture() {
           <>
             <video ref={videoRef} autoPlay playsInline muted
                    className="absolute inset-0 h-full w-full object-cover [transform:scaleX(-1)]" />
-            <FaceGuide />
+            <FaceGuide level={faceCheck.level} />
+            {faceCheck.hasDetector && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium backdrop-blur-md shadow-soft ${
+                    faceCheck.level === "good"
+                      ? "bg-green-500/25 text-green-100 ring-1 ring-green-300/40"
+                      : faceCheck.level === "warn"
+                      ? "bg-amber-500/25 text-amber-100 ring-1 ring-amber-300/40"
+                      : faceCheck.level === "bad"
+                      ? "bg-red-500/25 text-red-100 ring-1 ring-red-300/40"
+                      : "bg-white/15 text-white/85 ring-1 ring-white/20"
+                  }`}
+                >
+                  {faceCheck.hint}
+                </span>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -264,7 +294,12 @@ export default function Capture() {
             <button onClick={() => fileRef.current?.click()} className="btn-ghost">
               <Upload className="h-4 w-4" /> Upload
             </button>
-            <button onClick={snap} className="btn-primary" disabled={!stream}>
+            <button
+              onClick={snap}
+              className="btn-primary"
+              disabled={!stream || (faceCheck.hasDetector && !faceCheck.ok)}
+              title={faceCheck.hasDetector && !faceCheck.ok ? faceCheck.hint : undefined}
+            >
               <Camera className="h-4 w-4" /> Snap
             </button>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg" hidden onChange={pick} />
