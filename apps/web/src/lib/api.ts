@@ -49,7 +49,21 @@ async function jsonFetch<T>(input: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let body: unknown;
     try { body = await res.json(); } catch { body = await res.text(); }
-    throw new ApiError(res.status, `${res.status} ${res.statusText}`, body);
+    const detail = (() => {
+      if (typeof body === "string") return body.slice(0, 200);
+      if (body && typeof body === "object") {
+        const b = body as Record<string, unknown>;
+        const msg = b.error ?? b.message ?? b.error_message ?? b.detail;
+        if (typeof msg === "string") return msg;
+        try { return JSON.stringify(b).slice(0, 200); } catch { return ""; }
+      }
+      return "";
+    })();
+    const message = detail
+      ? `${res.status} ${res.statusText} — ${detail}`
+      : `${res.status} ${res.statusText}`;
+    console.error("[api]", input, "→", res.status, body);
+    throw new ApiError(res.status, message, body);
   }
   return res.json() as Promise<T>;
 }

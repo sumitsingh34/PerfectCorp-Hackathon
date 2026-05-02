@@ -85,12 +85,15 @@ async function callUpstream(url: string, init: RequestInit): Promise<{ ok: boole
   return { ok: upstream.ok, status: upstream.status, json, text };
 }
 
-/** YouCam V2 wraps every payload in `{ status, result: {...} }`. Unwrap it. */
+/** YouCam V2 wraps every payload in `{ status, data: {...} }`. Unwrap it. */
 function unwrap(json: Json): Record<string, unknown> {
   if (json && typeof json === "object" && !Array.isArray(json)) {
     const obj = json as Record<string, unknown>;
-    if (obj.result && typeof obj.result === "object" && !Array.isArray(obj.result)) {
-      return obj.result as Record<string, unknown>;
+    for (const key of ["data", "result"]) {
+      const v = obj[key];
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        return v as Record<string, unknown>;
+      }
     }
     return obj;
   }
@@ -182,17 +185,18 @@ app.get("/api/task/:feature/:id", async (c) => {
   );
   if (!up.ok) return upstreamErrorResponse("task-poll", up);
 
-  // Inner payload looks like { status: "running"|"success"|"error", results?, error?, progress? }
-  // Lift status/error/progress to the top, and expose everything else under `result`.
+  // Inner payload looks like { task_status: "running"|"success"|"error", results?, error?, progress? }
+  // Lift task_status/error/progress to the top, and expose everything else under `result`.
   const inner = unwrap(up.json);
-  const { status, error, progress, ...rest } = inner as {
+  const { task_status, status: legacyStatus, error, progress, ...rest } = inner as {
+    task_status?: string;
     status?: string;
     error?: unknown;
     progress?: number;
     [k: string]: unknown;
   };
   return jsonResponse({
-    status: status ?? "running",
+    status: task_status ?? legacyStatus ?? "running",
     result: rest,
     error,
     progress,
