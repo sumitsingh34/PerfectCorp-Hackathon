@@ -68,12 +68,9 @@ function ensureFeature(name: string): boolean {
   return FEATURES.has(name);
 }
 
-async function forward(
-  c: Parameters<Parameters<typeof app.get>[1]>[0],
-  url: string,
-  init: RequestInit,
-): Promise<Response> {
-  if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
+type Json = unknown;
+
+async function callUpstream(url: string, init: RequestInit): Promise<{ ok: boolean; status: number; json: Json; text: string }> {
   const upstream = await fetch(url, {
     ...init,
     headers: {
@@ -82,33 +79,123 @@ async function forward(
       ...(init.headers as Record<string, string> | undefined),
     },
   });
-  const body = await upstream.text();
-  return new Response(body, {
-    status: upstream.status,
-    headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" },
+  const text = await upstream.text();
+  let json: Json = null;
+  try { json = JSON.parse(text); } catch { /* non-JSON */ }
+  return { ok: upstream.ok, status: upstream.status, json, text };
+}
+
+/** YouCam V2 wraps every payload in `{ status, result: {...} }`. Unwrap it. */
+function unwrap(json: Json): Record<string, unknown> {
+  if (json && typeof json === "object" && !Array.isArray(json)) {
+    const obj = json as Record<string, unknown>;
+    if (obj.result && typeof obj.result === "object" && !Array.isArray(obj.result)) {
+      return obj.result as Record<string, unknown>;
+    }
+    return obj;
+  }
+  return {};
+}
+
+function headersToObject(h: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (Array.isArray(h)) {
+    for (const item of h as Array<{ name?: string; value?: string }>) {
+      if (item && typeof item.name === "string" && typeof item.value === "string") out[item.name] = item.value;
+    }
+  } else if (h && typeof h === "object") {
+    for (const [k, v] of Object.entries(h as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v;
+    }
+  }
+  return out;
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
   });
+}
+
+function upstreamErrorResponse(label: string, up: { status: number; json: Json; text: string }): Response {
+  console.error(`[proxy] ${label} upstream ${up.status}:`, up.text.slice(0, 500));
+  const body =
+    up.json && typeof up.json === "object"
+      ? up.json
+      : { error: `upstream ${up.status}`, detail: up.text.slice(0, 500) };
+  return jsonResponse(body, up.status || 502);
 }
 
 app.post("/api/upload/:feature", async (c) => {
   const feature = c.req.param("feature");
   if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
+  if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
-  return forward(c, `${YOUCAM_BASE}/s2s/v2.0/file/${feature}`, { method: "POST", body });
+  const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/file/${feature}`, { method: "POST", body });
+  if (!up.ok) return upstreamErrorResponse("upload", up);
+
+  const inner = unwrap(up.json);
+  const rawFiles = Array.isArray(inner.files) ? (inner.files as Array<Record<string, unknown>>) : [];
+  const files = rawFiles.map((f) => {
+    const requests = Array.isArray(f.requests) ? (f.requests as Array<Record<string, unknown>>) : [];
+    const req = requests[0] ?? {};
+    const upload_url = (typeof req.url === "string" ? req.url : (typeof f.upload_url === "string" ? f.upload_url : ""));
+    return {
+      file_id: typeof f.file_id === "string" ? f.file_id : "",
+      upload_url,
+      headers: headersToObject(req.headers ?? f.headers),
+    };
+  });
+  if (files.length === 0) {
+    console.error("[proxy] upload: empty files array; raw=", up.text.slice(0, 500));
+    return jsonResponse({ error: "upstream returned no upload targets", upstream: inner }, 502);
+  }
+  return jsonResponse({ files });
 });
 
 app.post("/api/task/:feature", async (c) => {
   const feature = c.req.param("feature");
   if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
+  if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
   const body = await c.req.text();
-  return forward(c, `${YOUCAM_BASE}/s2s/v2.0/task/${feature}`, { method: "POST", body });
+  const up = await callUpstream(`${YOUCAM_BASE}/s2s/v2.0/task/${feature}`, { method: "POST", body });
+  if (!up.ok) return upstreamErrorResponse("task-create", up);
+
+  const inner = unwrap(up.json);
+  const task_id = typeof inner.task_id === "string" ? inner.task_id : "";
+  if (!task_id) {
+    console.error("[proxy] task-create: missing task_id; raw=", up.text.slice(0, 500));
+    return jsonResponse({ error: "upstream returned no task_id", upstream: inner }, 502);
+  }
+  return jsonResponse({ task_id });
 });
 
 app.get("/api/task/:feature/:id", async (c) => {
   const feature = c.req.param("feature");
   const id = c.req.param("id");
   if (!ensureFeature(feature)) return c.json({ error: "unknown feature" }, 400);
-  return forward(c, `${YOUCAM_BASE}/s2s/v2.0/task/${feature}/${encodeURIComponent(id)}`, {
-    method: "GET",
+  if (!API_KEY) return c.json({ error: "proxy misconfigured: missing API key" }, 500);
+  const up = await callUpstream(
+    `${YOUCAM_BASE}/s2s/v2.0/task/${feature}/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  );
+  if (!up.ok) return upstreamErrorResponse("task-poll", up);
+
+  // Inner payload looks like { status: "running"|"success"|"error", results?, error?, progress? }
+  // Lift status/error/progress to the top, and expose everything else under `result`.
+  const inner = unwrap(up.json);
+  const { status, error, progress, ...rest } = inner as {
+    status?: string;
+    error?: unknown;
+    progress?: number;
+    [k: string]: unknown;
+  };
+  return jsonResponse({
+    status: status ?? "running",
+    result: rest,
+    error,
+    progress,
   });
 });
 
