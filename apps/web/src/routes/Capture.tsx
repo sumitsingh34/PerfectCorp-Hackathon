@@ -75,9 +75,16 @@ async function cropForUpload(srcCanvas: HTMLCanvasElement): Promise<Blob> {
     cropY = (H - cropH) * 0.42; // ellipse sits slightly above center
   }
 
-  // Cap output to a sensible upload size.
-  const MAX_EDGE = 1280;
-  const scale = Math.min(1, MAX_EDGE / Math.max(cropW, cropH));
+  // YouCam rejects too-small images (`error_below_min_image_size`) and we
+  // also don't want to ship enormous payloads. Upscale to clear the floor,
+  // then clamp to the ceiling.
+  const MIN_EDGE = 1024;
+  const MAX_EDGE = 1600;
+  let scale = 1;
+  const shortIn = Math.min(cropW, cropH);
+  const longIn = Math.max(cropW, cropH);
+  if (shortIn * scale < MIN_EDGE) scale = MIN_EDGE / shortIn;
+  if (longIn * scale > MAX_EDGE) scale = MAX_EDGE / longIn;
   const outW = Math.round(cropW * scale);
   const outH = Math.round(cropH * scale);
 
@@ -86,6 +93,8 @@ async function cropForUpload(srcCanvas: HTMLCanvasElement): Promise<Blob> {
   out.height = outH;
   const ctx = out.getContext("2d");
   if (!ctx) throw new Error("canvas 2d context unavailable");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(srcCanvas, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
 
   return await new Promise<Blob>((resolve, reject) =>
