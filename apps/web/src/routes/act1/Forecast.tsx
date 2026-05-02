@@ -43,7 +43,19 @@ export default function Forecast() {
         />
       </div>
 
-      {error && <p className="mt-2 text-xs text-glow-300">{error}</p>}
+      {error && (
+        <div className="mt-3 w-[min(92vw,420px)] mx-auto">
+          <p className="text-glow-300 text-xs break-all whitespace-pre-wrap max-h-48 overflow-auto rounded bg-black/40 p-2 select-text">
+            {error}
+          </p>
+          <button
+            onClick={() => navigator.clipboard?.writeText(error).catch(() => {})}
+            className="btn-ghost mt-2 text-xs"
+          >
+            Copy
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div className="glass p-2.5">

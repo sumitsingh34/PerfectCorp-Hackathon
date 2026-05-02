@@ -372,13 +372,14 @@ export async function runSkinTone(): Promise<SkinToneResult> {
 }
 
 /**
- * Per docs, aging-generator returns:
- *   { results: [{ id, data: [{ url, dst_id, res_age }] }] }
- * with multiple `data` items per requested age. We collect every `url` we can
- * find paired with an age field — `res_age`, `age`, or any sibling that names one.
+ * Aging response shape (per docs): `{ results: { output: [{ url, res_age }, ...], age, ... } }`.
+ * The API auto-generates a fixed series of ages from `age_min` to `age_max`;
+ * there's no parameter to request specific ages. We walk the tree to collect
+ * (age → url) pairs and pick the entries closest to `currentAge + 5/+10`.
  */
-function collectAgingPairs(raw: unknown): Map<number, string> {
-  const out = new Map<number, string>();
+function collectAgingPairs(raw: unknown): { byAge: Map<number, string>; currentAge: number | null } {
+  const byAge = new Map<number, string>();
+  let currentAge: number | null = null;
   const seen = new Set<unknown>();
   const stack: unknown[] = [raw];
   while (stack.length) {
@@ -391,46 +392,103 @@ function collectAgingPairs(raw: unknown): Map<number, string> {
     }
     const o = cur as Record<string, unknown>;
     const url = typeof o.url === "string" ? o.url : (typeof o.image_url === "string" ? o.image_url : undefined);
-    const age =
-      typeof o.res_age === "number" ? o.res_age :
-      typeof o.age === "number" ? o.age :
-      undefined;
-    if (url && typeof age === "number") out.set(age, url);
+    const resAge = typeof o.res_age === "number" ? o.res_age : undefined;
+    if (url && typeof resAge === "number") byAge.set(resAge, url);
+    if (currentAge === null && typeof o.age === "number" && url === undefined) currentAge = o.age;
     for (const v of Object.values(o)) stack.push(v);
   }
-  return out;
+  return { byAge, currentAge };
+}
+
+function nearestAge(byAge: Map<number, string>, target: number): string {
+  let best: { age: number; url: string } | null = null;
+  for (const [age, url] of byAge) {
+    if (!best || Math.abs(age - target) < Math.abs(best.age - target)) best = { age, url };
+  }
+  return best?.url ?? "";
 }
 
 export async function runAging(): Promise<AgingResult> {
   const selfie = selfieOrThrow();
   return withCache(`aging:${selfie.hash}`, async () => {
-    const raw = await runFeature<{ src_file_id: string; ages: number[] }, unknown>(
+    const raw = await runFeature<
+      {
+        request_id: number;
+        payload: {
+          file_sets: { src_ids: string[] };
+          actions: Array<{ id: number }>;
+          output_ext: string;
+        };
+      },
+      unknown
+    >(
       "aging",
       toBlob(selfie),
       `selfie.jpg`,
-      (file_id) => ({ src_file_id: file_id, ages: [5, 10] }),
+      (file_id) => ({
+        request_id: 0,
+        payload: {
+          file_sets: { src_ids: [file_id] },
+          actions: [{ id: 0 }],
+          output_ext: "jpg",
+        },
+      }),
     );
     console.log("[aging] raw response", raw);
-    const byAge = collectAgingPairs(raw);
+    const { byAge, currentAge } = collectAgingPairs(raw);
+    if (byAge.size === 0) {
+      throw new Error(`aging: no images. raw: ${JSON.stringify(raw).slice(0, 600)}`);
+    }
+    const base = currentAge ?? 30;
     return {
-      age5Url: byAge.get(5) || "",
-      age10Url: byAge.get(10) || "",
+      age5Url: nearestAge(byAge, base + 5),
+      age10Url: nearestAge(byAge, base + 10),
     };
   });
 }
+
+/** Map our internal ConcernKey to the YouCam skin-simulation slider parameter names. */
+const SIMULATION_PARAM: Record<ConcernKey, string> = {
+  wrinkle: "wrinkle",
+  pore: "pores",
+  age_spot: "spots",
+  redness: "redness",
+  radiance: "radiance",
+  texture: "texture",
+  dark_circle: "dark_circle",
+};
 
 export async function runSkinSimulation(top3: ConcernKey[]): Promise<SkinSimulationResult> {
   const selfie = selfieOrThrow();
   const key = `skin-sim:${selfie.hash}:${top3.join(",")}`;
   return withCache(key, async () => {
-    const raw = await runFeature<{ src_file_id: string; concerns: ConcernKey[] }, unknown>(
+    const raw = await runFeature<Record<string, unknown>, unknown>(
       "skin-simulation",
       toBlob(selfie),
       `selfie.jpg`,
-      (file_id) => ({ src_file_id: file_id, concerns: top3 }),
+      (file_id) => {
+        const body: Record<string, unknown> = { src_file_id: file_id };
+        // Push each top-3 concern's slider to 1.0 (max improvement). YouCam
+        // requires at least one parameter to be non-zero.
+        for (const k of top3) {
+          const param = SIMULATION_PARAM[k];
+          if (param) body[param] = 1.0;
+        }
+        // If somehow top3 is empty, default to a couple of safe sliders.
+        if (Object.keys(body).length === 1) {
+          body.radiance = 1.0;
+          body.texture = 1.0;
+        }
+        return body;
+      },
     );
+    console.log("[skin-simulation] raw response", raw);
     const p = pickFeaturePayload(raw, ["image_url", "result_url", "url"]);
-    return { improvedUrl: strField(p, "image_url", "result_url", "url") || "" };
+    const improvedUrl = strField(p, "image_url", "result_url", "url") || "";
+    if (!improvedUrl) {
+      throw new Error(`skin-simulation: no image url. raw: ${JSON.stringify(raw).slice(0, 600)}`);
+    }
+    return { improvedUrl };
   });
 }
 
