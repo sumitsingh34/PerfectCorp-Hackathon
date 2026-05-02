@@ -417,7 +417,7 @@ export async function runAging(): Promise<AgingResult> {
         payload: {
           file_sets: { src_ids: string[] };
           actions: Array<{ id: number }>;
-          output_ext: string;
+          output_ext: "jpg";
         };
       },
       unknown

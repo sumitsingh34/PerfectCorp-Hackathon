@@ -129,13 +129,26 @@ export async function pollTask<TResult = unknown>(
       const detail = describeTaskError(status.error);
       throw new ApiError(
         500,
-        detail ? `task failed — ${detail}` : "task failed",
+        detail ? `${feature} task failed — ${detail}` : `${feature} task failed`,
         status.error,
       );
     }
 
     await new Promise((r) => setTimeout(r, delay));
     delay = Math.min(delay * 1.6, 8000);
+  }
+}
+
+/** Wrap any thrown error with the feature name so we know which call failed. */
+async function tagged<T>(feature: string, step: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new ApiError(err.status, `${feature}/${step}: ${err.message}`, err.body);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`${feature}/${step}: ${msg}`);
   }
 }
 
@@ -148,18 +161,22 @@ export async function runFeature<TBody extends object, TResult = unknown>(
   opts: { onProgress?: (label: string, p: number) => void; signal?: AbortSignal } = {},
 ): Promise<TResult> {
   opts.onProgress?.("uploading", 5);
-  const { files } = await requestUpload(feature, [
-    { content_type: blob.type, file_name: fileName, file_size: blob.size },
-  ]);
+  const { files } = await tagged(feature, "upload", () =>
+    requestUpload(feature, [{ content_type: blob.type, file_name: fileName, file_size: blob.size }]),
+  );
   const target = files[0];
-  await uploadBlob(target, blob);
+  await tagged(feature, "s3-put", () => uploadBlob(target, blob));
 
   opts.onProgress?.("queued", 20);
-  const { task_id } = await createTask(feature, buildBody(target.file_id));
+  const { task_id } = await tagged(feature, "task-create", () =>
+    createTask(feature, buildBody(target.file_id)),
+  );
 
   opts.onProgress?.("processing", 30);
-  return pollTask<TResult>(feature, task_id, {
-    signal: opts.signal,
-    onProgress: (p) => opts.onProgress?.("processing", 30 + Math.round(p * 0.65)),
-  });
+  return tagged(feature, "poll", () =>
+    pollTask<TResult>(feature, task_id, {
+      signal: opts.signal,
+      onProgress: (p) => opts.onProgress?.("processing", 30 + Math.round(p * 0.65)),
+    }),
+  );
 }
