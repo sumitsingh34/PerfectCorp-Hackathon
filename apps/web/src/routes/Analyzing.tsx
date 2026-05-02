@@ -83,9 +83,19 @@ export default function Analyzing() {
         {STAGES[stage]}
       </motion.p>
       {error && (
-        <div className="mt-6 max-w-xs">
-          <p className="text-glow-300 text-sm">{error}</p>
-          <button onClick={() => nav("/capture")} className="btn-ghost mt-3">Try again</button>
+        <div className="mt-6 w-[min(92vw,420px)]">
+          <p className="text-glow-300 text-sm break-all whitespace-pre-wrap max-h-64 overflow-auto rounded bg-black/40 p-2 select-text">
+            {error}
+          </p>
+          <div className="mt-3 flex gap-2 justify-center">
+            <button
+              onClick={() => navigator.clipboard?.writeText(error).catch(() => {})}
+              className="btn-ghost"
+            >
+              Copy
+            </button>
+            <button onClick={() => nav("/capture")} className="btn-ghost">Try again</button>
+          </div>
         </div>
       )}
     </section>

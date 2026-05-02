@@ -63,13 +63,25 @@ function selfieOrThrow() {
   return s;
 }
 
+function looksEmpty(v: unknown): boolean {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (Array.isArray(o.concerns) && o.concerns.length === 0) return true;
+    if (typeof o.improvedUrl === "string" && !o.improvedUrl) return true;
+    if (typeof o.previewUrl === "string" && !o.previewUrl) return true;
+  }
+  return false;
+}
+
 async function withCache<T>(key: string, run: () => Promise<T>): Promise<T> {
   const { demoMode } = useSession.getState();
   if (demoMode) return demoFixture(key) as T;
   const hit = await getCached<T>(key);
-  if (hit) return hit;
+  if (hit && !looksEmpty(hit)) return hit;
   const fresh = await run();
-  await putCached(key, fresh);
+  if (!looksEmpty(fresh)) await putCached(key, fresh);
   return fresh;
 }
 
@@ -90,19 +102,31 @@ const HD_ACTIONS = [
   "hd_radiance", "hd_texture", "hd_dark_circle",
 ] as const;
 
-type SkinAnalysisRow = { action: string; ui_score?: number; mask_url?: string };
+type SkinAnalysisRow = { action?: string; concern?: string; ui_score?: number; score?: number; mask_url?: string; image_url?: string };
 
-/** YouCam V2 may nest the per-action rows as `results: [...]`, `results: { output: [...] }`, or `output: [...]`. */
+/**
+ * Walk the response tree and pull out the first array that looks like skin-analysis
+ * rows (each item has an `action` or `concern` field). YouCam nests this differently
+ * for different features and we'd rather find it anywhere than guess wrong.
+ */
 function pickActionRows(raw: unknown): SkinAnalysisRow[] {
-  if (!raw || typeof raw !== "object") return [];
-  const r = raw as Record<string, unknown>;
-  if (Array.isArray(r.results)) return r.results as SkinAnalysisRow[];
-  if (r.results && typeof r.results === "object") {
-    const inner = r.results as Record<string, unknown>;
-    if (Array.isArray(inner.output)) return inner.output as SkinAnalysisRow[];
-    if (Array.isArray(inner.results)) return inner.results as SkinAnalysisRow[];
+  const looksLikeRow = (v: unknown): v is SkinAnalysisRow =>
+    !!v && typeof v === "object" && (
+      typeof (v as Record<string, unknown>).action === "string" ||
+      typeof (v as Record<string, unknown>).concern === "string"
+    );
+  const looksLikeRowArray = (v: unknown): v is SkinAnalysisRow[] =>
+    Array.isArray(v) && v.length > 0 && looksLikeRow(v[0]);
+
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [raw];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+    seen.add(cur);
+    if (looksLikeRowArray(cur)) return cur;
+    for (const v of Object.values(cur as Record<string, unknown>)) stack.push(v);
   }
-  if (Array.isArray(r.output)) return r.output as SkinAnalysisRow[];
   return [];
 }
 
@@ -119,16 +143,20 @@ export async function runSkinAnalysis(): Promise<SkinAnalysisResult> {
       `selfie-${selfie.hash.slice(0, 8)}.${selfie.contentType.includes("png") ? "png" : "jpg"}`,
       (file_id) => ({ src_file_id: file_id, dst_actions: HD_ACTIONS }),
     );
+    console.log("[skin-analysis] raw response", raw);
     const rows = pickActionRows(raw);
-    if (rows.length === 0) console.warn("[skin-analysis] no rows in", raw);
+    if (rows.length === 0) {
+      const preview = JSON.stringify(raw).slice(0, 600);
+      throw new Error(`skin-analysis returned no rows. Shape: ${preview}`);
+    }
     const concerns = rows
       .map((r) => {
-        const key = r.action.replace(/^hd_/, "") as ConcernKey;
+        const rawKey = (r.action ?? r.concern ?? "").replace(/^hd_/, "");
         return {
-          key,
-          label: CONCERN_LABELS[key] ?? key,
-          score: r.ui_score ?? 50,
-          maskUrl: r.mask_url,
+          key: rawKey as ConcernKey,
+          label: CONCERN_LABELS[rawKey as ConcernKey] ?? rawKey,
+          score: r.ui_score ?? r.score ?? 50,
+          maskUrl: r.mask_url ?? r.image_url,
         };
       })
       .filter((c) => CONCERN_LABELS[c.key]);
@@ -137,26 +165,32 @@ export async function runSkinAnalysis(): Promise<SkinAnalysisResult> {
   });
 }
 
-/** Pull the first object that looks like the feature payload, regardless of nesting. */
-function pickFeaturePayload(raw: unknown): Record<string, unknown> {
-  if (!raw || typeof raw !== "object") return {};
-  const r = raw as Record<string, unknown>;
-  // results may be the payload, an array containing it, or an object with `output`.
-  const results = r.results;
-  if (Array.isArray(results) && results[0] && typeof results[0] === "object") {
-    return results[0] as Record<string, unknown>;
-  }
-  if (results && typeof results === "object") {
-    const inner = results as Record<string, unknown>;
-    if (Array.isArray(inner.output) && inner.output[0] && typeof inner.output[0] === "object") {
-      return inner.output[0] as Record<string, unknown>;
+/**
+ * Walk the response tree to find the first object that contains any of the
+ * `markerKeys`. This lets us tolerate `{results: {...}}`, `{result: {...}}`,
+ * `{results: [{...}]}`, `{output: [{...}]}`, or the payload sitting at top level.
+ */
+function pickFeaturePayload(raw: unknown, markerKeys: string[]): Record<string, unknown> {
+  const hasMarker = (v: unknown): v is Record<string, unknown> =>
+    !!v && typeof v === "object" && !Array.isArray(v) &&
+    markerKeys.some((k) => k in (v as Record<string, unknown>));
+
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [raw];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+    seen.add(cur);
+    if (hasMarker(cur)) return cur;
+    if (Array.isArray(cur)) {
+      for (const v of cur) stack.push(v);
+    } else {
+      for (const v of Object.values(cur as Record<string, unknown>)) stack.push(v);
     }
-    return inner;
   }
-  if (Array.isArray(r.output) && r.output[0] && typeof r.output[0] === "object") {
-    return r.output[0] as Record<string, unknown>;
-  }
-  return r;
+  return raw && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
 }
 
 function strField(raw: Record<string, unknown>, ...keys: string[]): string | undefined {
@@ -176,16 +210,25 @@ export async function runSkinTone(): Promise<SkinToneResult> {
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id }),
     );
-    const p = pickFeaturePayload(raw);
+    console.log("[skin-tone] raw response", raw);
+    const p = pickFeaturePayload(raw, ["skin_color", "skin_hex", "undertone", "skin_undertone", "lip_color"]);
+    const skinHex = strField(p, "skin_color", "skin_hex");
+    const lipHex = strField(p, "lip_color", "lip_hex");
+    const eyeHex = strField(p, "eye_color", "eye_hex");
+    const hairHex = strField(p, "hair_color", "hair_hex");
+    if (!skinHex && !lipHex && !eyeHex && !hairHex) {
+      const preview = JSON.stringify(raw).slice(0, 600);
+      throw new Error(`skin-tone returned no color fields. Shape: ${preview}`);
+    }
     const undertoneRaw = (strField(p, "undertone", "skin_undertone") || "neutral").toLowerCase();
     const undertone: SkinToneResult["undertone"] =
       undertoneRaw.startsWith("c") ? "cool" : undertoneRaw.startsWith("w") ? "warm" : "neutral";
     return {
       undertone,
-      skinHex: strField(p, "skin_color", "skin_hex") || "#d9b59a",
-      lipHex: strField(p, "lip_color", "lip_hex") || "#c46a6a",
-      eyeHex: strField(p, "eye_color", "eye_hex") || "#5b3a29",
-      hairHex: strField(p, "hair_color", "hair_hex") || "#2a1a14",
+      skinHex: skinHex || "#d9b59a",
+      lipHex: lipHex || "#c46a6a",
+      eyeHex: eyeHex || "#5b3a29",
+      hairHex: hairHex || "#2a1a14",
     };
   });
 }
@@ -235,7 +278,7 @@ export async function runSkinSimulation(top3: ConcernKey[]): Promise<SkinSimulat
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, concerns: top3 }),
     );
-    const p = pickFeaturePayload(raw);
+    const p = pickFeaturePayload(raw, ["image_url", "result_url", "url"]);
     return { improvedUrl: strField(p, "image_url", "result_url", "url") || "" };
   });
 }
@@ -249,7 +292,7 @@ export async function runMakeup(lookId: string): Promise<MakeupResult> {
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, look_id: lookId }),
     );
-    const p = pickFeaturePayload(raw);
+    const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "look_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
       lookName: strField(p, "look_name") || lookId,
@@ -269,7 +312,7 @@ export async function runHair(templateId: string, colorHex?: string): Promise<Ha
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, template_id: templateId, color: colorHex }),
     );
-    const p = pickFeaturePayload(raw);
+    const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "style_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
       styleName: strField(p, "style_name") || templateId,
@@ -286,7 +329,7 @@ export async function runClothes(garmentId: string): Promise<ClothesResult> {
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, garment_id: garmentId }),
     );
-    const p = pickFeaturePayload(raw);
+    const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "garment_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
       garmentName: strField(p, "garment_name") || garmentId,
@@ -308,7 +351,7 @@ export async function runAccessory(
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, item_id: itemId }),
     );
-    const p = pickFeaturePayload(raw);
+    const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "item_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
       itemName: strField(p, "item_name") || itemId,
