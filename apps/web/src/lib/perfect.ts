@@ -114,18 +114,93 @@ type SkinAnalysisRow = {
 };
 
 /**
- * Walk the response tree and pull out the first array that looks like skin-analysis
- * rows (each item has an `action` or `concern` field). YouCam nests this differently
- * for different features and we'd rather find it anywhere than guess wrong.
+ * Per YouCam V2 docs, score_info.json inside the skin-analysis ZIP looks like:
+ *   {
+ *     "hd_redness":     { "raw_score": ..., "ui_score": 77, "output_mask_name": "hd_redness_output.png" },
+ *     "hd_pore":        { "all": { "ui_score": ..., "output_mask_name": "..." }, "forehead": {...}, ... },
+ *     "hd_wrinkle":     { "all": { ... }, "forehead": {...}, "crowfeet": {...}, ... },
+ *     "all":            { "score": 75.75 },
+ *     "skin_age":       37
+ *   }
+ *
+ * Some concerns are flat, others are subdivided by anatomical region with an
+ * aggregate `all` (or `whole`) sub-key. We unify both.
  */
 function pickActionRows(raw: unknown): SkinAnalysisRow[] {
+  const ACTION_KEY = /^hd_(wrinkle|pore|age_spot|redness|radiance|texture|dark_circle)/i;
+  const SUB_AGG_KEYS = ["all", "whole", "overall", "total"];
+
+  const scoreFrom = (v: Record<string, unknown>): number | undefined => {
+    if (typeof v.ui_score === "number") return v.ui_score;
+    if (typeof v.score === "number") return v.score;
+    if (typeof v.raw_score === "number") return Math.round(v.raw_score);
+    return undefined;
+  };
+  const maskFrom = (v: Record<string, unknown>): string | undefined => {
+    for (const k of ["output_mask_name", "mask_url", "mask", "mask_image", "image", "image_url"]) {
+      const s = v[k];
+      if (typeof s === "string" && s) return s;
+    }
+    return undefined;
+  };
+
+  const fromActionEntry = (key: string, val: unknown): SkinAnalysisRow | null => {
+    if (typeof val === "number") return { action: key, ui_score: val };
+    if (!val || typeof val !== "object" || Array.isArray(val)) return null;
+    const v = val as Record<string, unknown>;
+    // Flat shape: ui_score / output_mask_name on this object.
+    let score = scoreFrom(v);
+    let mask = maskFrom(v);
+    if (score !== undefined) return { action: key, ui_score: score, mask_url: mask };
+    // Subdivided shape: prefer the aggregate sub-key, else average present sub-scores.
+    for (const aggKey of SUB_AGG_KEYS) {
+      const sub = v[aggKey];
+      if (sub && typeof sub === "object") {
+        const subObj = sub as Record<string, unknown>;
+        const s = scoreFrom(subObj);
+        if (s !== undefined) {
+          score = s;
+          mask = maskFrom(subObj) ?? mask;
+          break;
+        }
+      }
+    }
+    if (score === undefined) {
+      const subs: number[] = [];
+      let firstMask: string | undefined;
+      for (const sub of Object.values(v)) {
+        if (sub && typeof sub === "object" && !Array.isArray(sub)) {
+          const s = scoreFrom(sub as Record<string, unknown>);
+          if (s !== undefined) {
+            subs.push(s);
+            firstMask ??= maskFrom(sub as Record<string, unknown>);
+          }
+        }
+      }
+      if (subs.length) {
+        score = Math.round(subs.reduce((a, b) => a + b, 0) / subs.length);
+        mask = mask ?? firstMask;
+      }
+    }
+    if (score === undefined) return null;
+    return { action: key, ui_score: score, mask_url: mask };
+  };
+
+  const fromActionKeyedObject = (obj: Record<string, unknown>): SkinAnalysisRow[] => {
+    const rows: SkinAnalysisRow[] = [];
+    for (const [key, val] of Object.entries(obj)) {
+      if (!ACTION_KEY.test(key)) continue;
+      const row = fromActionEntry(key, val);
+      if (row) rows.push(row);
+    }
+    return rows;
+  };
+
   const looksLikeRow = (v: unknown): v is SkinAnalysisRow =>
     !!v && typeof v === "object" && (
       typeof (v as Record<string, unknown>).action === "string" ||
       typeof (v as Record<string, unknown>).concern === "string"
     );
-  const looksLikeRowArray = (v: unknown): v is SkinAnalysisRow[] =>
-    Array.isArray(v) && v.length > 0 && looksLikeRow(v[0]);
 
   const seen = new Set<unknown>();
   const stack: unknown[] = [raw];
@@ -133,8 +208,16 @@ function pickActionRows(raw: unknown): SkinAnalysisRow[] {
     const cur = stack.pop();
     if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
     seen.add(cur);
-    if (looksLikeRowArray(cur)) return cur;
-    for (const v of Object.values(cur as Record<string, unknown>)) stack.push(v);
+    if (Array.isArray(cur)) {
+      const arrRows = cur.filter(looksLikeRow) as SkinAnalysisRow[];
+      if (arrRows.length) return arrRows;
+      for (const v of cur) stack.push(v);
+      continue;
+    }
+    const obj = cur as Record<string, unknown>;
+    const rows = fromActionKeyedObject(obj);
+    if (rows.length) return rows;
+    for (const v of Object.values(obj)) stack.push(v);
   }
   return [];
 }
@@ -159,6 +242,7 @@ export async function runSkinAnalysis(): Promise<SkinAnalysisResult> {
     const zipUrl = findZipUrl(raw);
     let rows = pickActionRows(raw);
     let zipEntries: ZipEntry[] = [];
+    let zipJson: unknown = null;
     if (rows.length === 0 && zipUrl) {
       try {
         zipEntries = await fetchZip(zipUrl);
@@ -166,14 +250,15 @@ export async function runSkinAnalysis(): Promise<SkinAnalysisResult> {
         const msg = err instanceof Error ? err.message : String(err);
         throw new Error(`skin-analysis ZIP fetch failed (${msg}). URL: ${zipUrl.slice(0, 200)}`);
       }
-      const json = findJson(zipEntries);
-      console.log("[skin-analysis] zip JSON", json, "files:", zipEntries.map((e) => e.name));
-      rows = pickActionRows(json);
+      zipJson = findJson(zipEntries);
+      console.log("[skin-analysis] zip JSON", zipJson, "files:", zipEntries.map((e) => e.name));
+      rows = pickActionRows(zipJson);
     }
     if (rows.length === 0) {
-      const preview = JSON.stringify(raw).slice(0, 600);
-      const fileList = zipEntries.length ? ` zip files: ${zipEntries.map((e) => e.name).join(", ")}` : "";
-      throw new Error(`skin-analysis returned no rows. Shape: ${preview}${fileList}`);
+      const fileList = zipEntries.length ? ` | files: ${zipEntries.map((e) => e.name).join(", ")}` : "";
+      const innerPreview = zipJson ? ` | score JSON: ${JSON.stringify(zipJson).slice(0, 600)}` : "";
+      const preview = JSON.stringify(raw).slice(0, 200);
+      throw new Error(`skin-analysis: no rows. raw: ${preview}${fileList}${innerPreview}`);
     }
     const masks = imageUrlsByName(zipEntries);
     const concerns = rows
@@ -286,18 +371,34 @@ export async function runSkinTone(): Promise<SkinToneResult> {
   });
 }
 
-type AgingRow = { age?: number; image_url?: string };
-
-function pickAgingRows(raw: unknown): AgingRow[] {
-  if (!raw || typeof raw !== "object") return [];
-  const r = raw as Record<string, unknown>;
-  if (Array.isArray(r.results)) return r.results as AgingRow[];
-  if (r.results && typeof r.results === "object") {
-    const inner = r.results as Record<string, unknown>;
-    if (Array.isArray(inner.output)) return inner.output as AgingRow[];
+/**
+ * Per docs, aging-generator returns:
+ *   { results: [{ id, data: [{ url, dst_id, res_age }] }] }
+ * with multiple `data` items per requested age. We collect every `url` we can
+ * find paired with an age field — `res_age`, `age`, or any sibling that names one.
+ */
+function collectAgingPairs(raw: unknown): Map<number, string> {
+  const out = new Map<number, string>();
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [raw];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+    seen.add(cur);
+    if (Array.isArray(cur)) {
+      for (const v of cur) stack.push(v);
+      continue;
+    }
+    const o = cur as Record<string, unknown>;
+    const url = typeof o.url === "string" ? o.url : (typeof o.image_url === "string" ? o.image_url : undefined);
+    const age =
+      typeof o.res_age === "number" ? o.res_age :
+      typeof o.age === "number" ? o.age :
+      undefined;
+    if (url && typeof age === "number") out.set(age, url);
+    for (const v of Object.values(o)) stack.push(v);
   }
-  if (Array.isArray(r.output)) return r.output as AgingRow[];
-  return [];
+  return out;
 }
 
 export async function runAging(): Promise<AgingResult> {
@@ -309,11 +410,8 @@ export async function runAging(): Promise<AgingResult> {
       `selfie.jpg`,
       (file_id) => ({ src_file_id: file_id, ages: [5, 10] }),
     );
-    const rows = pickAgingRows(raw);
-    const byAge = new Map<number, string>();
-    for (const row of rows) {
-      if (typeof row.age === "number" && typeof row.image_url === "string") byAge.set(row.age, row.image_url);
-    }
+    console.log("[aging] raw response", raw);
+    const byAge = collectAgingPairs(raw);
     return {
       age5Url: byAge.get(5) || "",
       age10Url: byAge.get(10) || "",
