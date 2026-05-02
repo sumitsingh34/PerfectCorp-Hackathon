@@ -11,6 +11,7 @@ import { runFeature } from "./api";
 import { useSession } from "@/store/session";
 import { getCached, putCached } from "./cache";
 import { demoFixture } from "./demo-fixtures";
+import { fetchZip, findJson, imageUrlsByName, type ZipEntry } from "./zip";
 
 // ─── Result types ──────────────────────────────────────────────────────────
 
@@ -102,7 +103,15 @@ const HD_ACTIONS = [
   "hd_radiance", "hd_texture", "hd_dark_circle",
 ] as const;
 
-type SkinAnalysisRow = { action?: string; concern?: string; ui_score?: number; score?: number; mask_url?: string; image_url?: string };
+type SkinAnalysisRow = {
+  action?: string;
+  concern?: string;
+  ui_score?: number;
+  score?: number;
+  mask_url?: string;
+  image_url?: string;
+  mask?: string;
+};
 
 /**
  * Walk the response tree and pull out the first array that looks like skin-analysis
@@ -144,25 +153,69 @@ export async function runSkinAnalysis(): Promise<SkinAnalysisResult> {
       (file_id) => ({ src_file_id: file_id, dst_actions: HD_ACTIONS }),
     );
     console.log("[skin-analysis] raw response", raw);
-    const rows = pickActionRows(raw);
+    // YouCam V2 returns the per-action results inside a presigned ZIP, e.g.
+    //   { results: { url: "https://...zip?X-Amz-..." } }
+    // Fetch + extract on the client; the ZIP holds a JSON manifest plus mask PNGs.
+    const zipUrl = findZipUrl(raw);
+    let rows = pickActionRows(raw);
+    let zipEntries: ZipEntry[] = [];
+    if (rows.length === 0 && zipUrl) {
+      try {
+        zipEntries = await fetchZip(zipUrl);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`skin-analysis ZIP fetch failed (${msg}). URL: ${zipUrl.slice(0, 200)}`);
+      }
+      const json = findJson(zipEntries);
+      console.log("[skin-analysis] zip JSON", json, "files:", zipEntries.map((e) => e.name));
+      rows = pickActionRows(json);
+    }
     if (rows.length === 0) {
       const preview = JSON.stringify(raw).slice(0, 600);
-      throw new Error(`skin-analysis returned no rows. Shape: ${preview}`);
+      const fileList = zipEntries.length ? ` zip files: ${zipEntries.map((e) => e.name).join(", ")}` : "";
+      throw new Error(`skin-analysis returned no rows. Shape: ${preview}${fileList}`);
     }
+    const masks = imageUrlsByName(zipEntries);
     const concerns = rows
       .map((r) => {
         const rawKey = (r.action ?? r.concern ?? "").replace(/^hd_/, "");
+        const maskRef = r.mask_url ?? r.image_url ?? r.mask;
+        const maskUrl = typeof maskRef === "string" ? (masks[maskRef] ?? maskRef) : undefined;
         return {
           key: rawKey as ConcernKey,
           label: CONCERN_LABELS[rawKey as ConcernKey] ?? rawKey,
           score: r.ui_score ?? r.score ?? 50,
-          maskUrl: r.mask_url ?? r.image_url,
+          maskUrl,
         };
       })
       .filter((c) => CONCERN_LABELS[c.key]);
     const top3 = [...concerns].sort((a, b) => a.score - b.score).slice(0, 3).map((c) => c.key);
     return { concerns, top3 };
   });
+}
+
+/** Walk the response and find any string field that looks like a presigned ZIP URL. */
+function findZipUrl(raw: unknown): string | null {
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [raw];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (cur == null || seen.has(cur)) continue;
+    if (typeof cur === "string") {
+      // Heuristic: presigned URLs are HTTPS, AWS-signed; result archive ends in .zip before query.
+      const m = cur.match(/^https?:\/\/[^?]+\.zip(\?|$)/i);
+      if (m) return cur;
+      continue;
+    }
+    if (typeof cur !== "object") continue;
+    seen.add(cur);
+    if (Array.isArray(cur)) {
+      for (const v of cur) stack.push(v);
+    } else {
+      for (const v of Object.values(cur as Record<string, unknown>)) stack.push(v);
+    }
+  }
+  return null;
 }
 
 /**
