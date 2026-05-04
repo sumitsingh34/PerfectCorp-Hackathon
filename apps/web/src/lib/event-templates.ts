@@ -24,11 +24,41 @@ export type EventTemplate = {
   hairReferenceUrl: string;
   /** Display label for the style; falls back to whatever the API returns. */
   hairStyleName: string;
-  makeupLookId: string;
+  /**
+   * Perfect Corp's makeup-vto has no look catalog — it takes an effects array
+   * with per-category hex colors. Each event ships its own effects.
+   */
+  makeupEffects: MakeupEffect[];
+  makeupLookName: string;
   garmentId: string;
   accessory: { category: "bag" | "jewelry" | "shoes"; itemId: string };
   paletteHint: string[];
 };
+
+/**
+ * One entry in makeup-vto's `effects` array. The exact shape varies by
+ * `category` (lip_color, eye_shadow, blush, ...); we keep it permissive so
+ * each event can supply whatever the API expects for that category.
+ */
+export type MakeupEffect = Record<string, unknown>;
+
+/** Helper: minimal lip color effect. */
+const lip = (hex: string, texture: "matte" | "gloss" | "shimmer" = "matte", intensity = 80): MakeupEffect => ({
+  category: "lip_color",
+  palettes: [{ color: hex, texture, colorIntensity: intensity }],
+});
+
+/** Helper: minimal blush effect. */
+const blush = (hex: string, intensity = 50): MakeupEffect => ({
+  category: "blush",
+  palettes: [{ color: hex, colorIntensity: intensity }],
+});
+
+/** Helper: minimal eye shadow effect (single color). */
+const eyeShadow = (hex: string, intensity = 60): MakeupEffect => ({
+  category: "eye_shadow",
+  palettes: [{ color: hex, texture: "matte", colorIntensity: intensity }],
+});
 
 export const EVENTS: Record<EventKey, EventTemplate> = {
   date: {
@@ -38,7 +68,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     emoji: "🌹",
     hairReferenceUrl: "/hair/loose_waves.jpg",
     hairStyleName: "Loose Waves",
-    makeupLookId: "ember_glow",
+    makeupLookName: "Ember Glow",
+    makeupEffects: [lip("#7a1a2b", "gloss", 85), blush("#c46a6a", 55), eyeShadow("#a85a4a", 55)],
     garmentId: "slip_dress_burgundy",
     accessory: { category: "jewelry", itemId: "gold_hoops_md" },
     paletteHint: ["#7a1a2b", "#c46a6a", "#f7d6c1"],
@@ -50,7 +81,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     emoji: "💼",
     hairReferenceUrl: "/hair/low_pony.jpg",
     hairStyleName: "Low Pony",
-    makeupLookId: "clean_neutral",
+    makeupLookName: "Clean Neutral",
+    makeupEffects: [lip("#a85f4a", "matte", 60), blush("#c89880", 35)],
     garmentId: "tailored_blazer_charcoal",
     accessory: { category: "bag", itemId: "structured_tote_black" },
     paletteHint: ["#1a1a1f", "#5e6770", "#e7e3dc"],
@@ -62,7 +94,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     emoji: "💐",
     hairReferenceUrl: "/hair/soft_updo.jpg",
     hairStyleName: "Soft Updo",
-    makeupLookId: "rose_petal",
+    makeupLookName: "Rose Petal",
+    makeupEffects: [lip("#cf6a78", "gloss", 75), blush("#e6a8a2", 45), eyeShadow("#d8b4a8", 50)],
     garmentId: "midi_dress_dustyrose",
     accessory: { category: "shoes", itemId: "block_heel_nude" },
     paletteHint: ["#cf8a8a", "#e6b8a2", "#f5e6da"],
@@ -74,7 +107,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     emoji: "🌴",
     hairReferenceUrl: "/hair/beachy_waves.jpg",
     hairStyleName: "Beachy Waves",
-    makeupLookId: "sunlit_bronze",
+    makeupLookName: "Sunlit Bronze",
+    makeupEffects: [lip("#c89456", "gloss", 70), blush("#d6a070", 60), eyeShadow("#a87038", 55)],
     garmentId: "linen_set_white",
     accessory: { category: "bag", itemId: "straw_crossbody" },
     paletteHint: ["#f4d6a8", "#c89456", "#1f6b6f"],
@@ -86,7 +120,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     emoji: "☕",
     hairReferenceUrl: "/hair/messy_bun.jpg",
     hairStyleName: "Messy Bun",
-    makeupLookId: "your_skin_better",
+    makeupLookName: "Your Skin But Better",
+    makeupEffects: [lip("#b08070", "matte", 50), blush("#d8a890", 30)],
     garmentId: "denim_oversize_set",
     accessory: { category: "shoes", itemId: "sneaker_white_low" },
     paletteHint: ["#7a5a3a", "#d8c5b0", "#1c1c1c"],

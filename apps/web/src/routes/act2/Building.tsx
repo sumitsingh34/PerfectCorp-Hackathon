@@ -34,7 +34,7 @@ export default function Building() {
         setHair(hair);
 
         setStage(1);
-        const makeup = await runMakeup(tpl.makeupLookId);
+        const makeup = await runMakeup(tpl.makeupEffects, tpl.makeupLookName);
         setMakeup(makeup);
 
         setStage(2);

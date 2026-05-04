@@ -475,19 +475,31 @@ export async function runSkinSimulation(top3: ConcernKey[]): Promise<SkinSimulat
   });
 }
 
-export async function runMakeup(lookId: string): Promise<MakeupResult> {
+export async function runMakeup(
+  effects: ReadonlyArray<Record<string, unknown>>,
+  lookName: string,
+): Promise<MakeupResult> {
   const selfie = selfieOrThrow();
-  return withCache(`makeup:${selfie.hash}:${lookId}`, async () => {
-    const raw = await runFeature<{ src_file_id: string; look_id: string }, unknown>(
+  // Stable cache key: hash of the effects payload + lookName.
+  const cacheKey = `makeup:${selfie.hash}:${lookName}:${JSON.stringify(effects)}`;
+  return withCache(cacheKey, async () => {
+    const raw = await runFeature<
+      {
+        src_file_id: string;
+        effects: ReadonlyArray<Record<string, unknown>>;
+        version: string;
+      },
+      unknown
+    >(
       "makeup-vto",
       toBlob(selfie),
       `selfie.jpg`,
-      (file_id) => ({ src_file_id: file_id, look_id: lookId }),
+      (file_id) => ({ src_file_id: file_id, effects, version: "1.0" }),
     );
     const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "look_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
-      lookName: strField(p, "look_name") || lookId,
+      lookName: strField(p, "look_name") || lookName,
     };
   });
 }
