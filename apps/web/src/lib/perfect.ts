@@ -7,7 +7,7 @@
  * reveals the real shape, only the `parse*` adapters here need to change.
  */
 
-import { runFeature } from "./api";
+import { runFeature, requestUpload, uploadBlob, createTask, pollTask } from "./api";
 import { useSession } from "@/store/session";
 import { getCached, putCached } from "./cache";
 import { demoFixture } from "./demo-fixtures";
@@ -492,22 +492,42 @@ export async function runMakeup(lookId: string): Promise<MakeupResult> {
   });
 }
 
-export async function runHair(templateId: string, colorHex?: string): Promise<HairResult> {
+/**
+ * Hair Transfer needs both the source selfie AND a reference image of the
+ * desired hairstyle. Upload both, run the task with their file IDs.
+ * `refImageUrl` is a same-origin static asset (e.g. `/hair/loose_waves.jpg`)
+ * served by the web app — fetched as a Blob and re-uploaded to YouCam.
+ */
+export async function runHair(refImageUrl: string, styleName: string): Promise<HairResult> {
   const selfie = selfieOrThrow();
-  return withCache(`hair:${selfie.hash}:${templateId}:${colorHex || ""}`, async () => {
-    const raw = await runFeature<
-      { src_file_id: string; template_id: string; color?: string },
-      unknown
-    >(
-      "hair-transfer",
-      toBlob(selfie),
-      `selfie.jpg`,
-      (file_id) => ({ src_file_id: file_id, template_id: templateId, color: colorHex }),
-    );
+  return withCache(`hair:${selfie.hash}:${refImageUrl}`, async () => {
+    const refRes = await fetch(refImageUrl);
+    if (!refRes.ok) {
+      throw new Error(`hair: failed to fetch reference image ${refImageUrl} (${refRes.status})`);
+    }
+    const refBlob = await refRes.blob();
+    const selfieBlob = toBlob(selfie);
+
+    const srcUpload = await requestUpload("hair-transfer", [
+      { content_type: selfieBlob.type, file_name: "selfie.jpg", file_size: selfieBlob.size },
+    ]);
+    const refUpload = await requestUpload("hair-transfer", [
+      { content_type: refBlob.type, file_name: "reference.jpg", file_size: refBlob.size },
+    ]);
+    const srcTarget = srcUpload.files[0];
+    const refTarget = refUpload.files[0];
+
+    await Promise.all([uploadBlob(srcTarget, selfieBlob), uploadBlob(refTarget, refBlob)]);
+
+    const { task_id } = await createTask("hair-transfer", {
+      src_file_id: srcTarget.file_id,
+      ref_file_id: refTarget.file_id,
+    });
+    const raw = await pollTask("hair-transfer", task_id);
     const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "style_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
-      styleName: strField(p, "style_name") || templateId,
+      styleName: strField(p, "style_name") || styleName,
     };
   });
 }

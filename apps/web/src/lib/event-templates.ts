@@ -16,9 +16,14 @@ export type EventTemplate = {
   title: string;
   blurb: string;
   emoji: string;
-  hairTemplateId: string;
-  /** Hex used to tint hair if the API supports color. */
-  hairColorHex?: string;
+  /**
+   * Public URL (or same-origin path under apps/web/public/hair/) of a
+   * reference photo for the desired hairstyle. Perfect Corp's hair-transfer
+   * uploads this image and transfers its style onto the selfie.
+   */
+  hairReferenceUrl: string;
+  /** Display label for the style; falls back to whatever the API returns. */
+  hairStyleName: string;
   makeupLookId: string;
   garmentId: string;
   accessory: { category: "bag" | "jewelry" | "shoes"; itemId: string };
@@ -31,8 +36,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     title: "Date Night",
     blurb: "Soft glow, ember lip, an outfit that moves with the candlelight.",
     emoji: "🌹",
-    hairTemplateId: "loose_waves",
-    hairColorHex: "#3a2118",
+    hairReferenceUrl: "/hair/loose_waves.jpg",
+    hairStyleName: "Loose Waves",
     makeupLookId: "ember_glow",
     garmentId: "slip_dress_burgundy",
     accessory: { category: "jewelry", itemId: "gold_hoops_md" },
@@ -43,7 +48,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     title: "Job Interview",
     blurb: "Sharpened polish. A look that says 'I've already started.'",
     emoji: "💼",
-    hairTemplateId: "low_pony",
+    hairReferenceUrl: "/hair/low_pony.jpg",
+    hairStyleName: "Low Pony",
     makeupLookId: "clean_neutral",
     garmentId: "tailored_blazer_charcoal",
     accessory: { category: "bag", itemId: "structured_tote_black" },
@@ -54,7 +60,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     title: "Wedding Guest",
     blurb: "Soft romance, complimentary not competitive.",
     emoji: "💐",
-    hairTemplateId: "soft_updo",
+    hairReferenceUrl: "/hair/soft_updo.jpg",
+    hairStyleName: "Soft Updo",
     makeupLookId: "rose_petal",
     garmentId: "midi_dress_dustyrose",
     accessory: { category: "shoes", itemId: "block_heel_nude" },
@@ -65,8 +72,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     title: "Vacation",
     blurb: "Sun-kissed, breezy, ready to be photographed by accident.",
     emoji: "🌴",
-    hairTemplateId: "beachy_waves",
-    hairColorHex: "#7a5a3a",
+    hairReferenceUrl: "/hair/beachy_waves.jpg",
+    hairStyleName: "Beachy Waves",
     makeupLookId: "sunlit_bronze",
     garmentId: "linen_set_white",
     accessory: { category: "bag", itemId: "straw_crossbody" },
@@ -77,7 +84,8 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     title: "Casual Friday",
     blurb: "Effortless, but not accidentally - confident neutrals with a wink.",
     emoji: "☕",
-    hairTemplateId: "messy_bun",
+    hairReferenceUrl: "/hair/messy_bun.jpg",
+    hairStyleName: "Messy Bun",
     makeupLookId: "your_skin_better",
     garmentId: "denim_oversize_set",
     accessory: { category: "shoes", itemId: "sneaker_white_low" },

@@ -30,7 +30,7 @@ export default function Building() {
     (async () => {
       try {
         setStage(0);
-        const hair = await runHair(tpl.hairTemplateId, tpl.hairColorHex);
+        const hair = await runHair(tpl.hairReferenceUrl, tpl.hairStyleName);
         setHair(hair);
 
         setStage(1);
