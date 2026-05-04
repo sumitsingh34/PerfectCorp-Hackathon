@@ -505,6 +505,17 @@ export async function runHair(refImageUrl: string, styleName: string): Promise<H
     if (!refRes.ok) {
       throw new Error(`hair: failed to fetch reference image ${refImageUrl} (${refRes.status})`);
     }
+    const refContentType = refRes.headers.get("content-type") || "";
+    if (!refContentType.startsWith("image/")) {
+      // Vite dev server serves index.html (200 OK, text/html) for missing
+      // static paths. Catch that here so we don't upload HTML to YouCam and
+      // get a downstream PIL.UnidentifiedImageError.
+      throw new Error(
+        `hair: reference image not found at ${refImageUrl} ` +
+          `(got content-type "${refContentType}"). ` +
+          `Drop a real JPG at apps/web/public${refImageUrl}.`,
+      );
+    }
     const refBlob = await refRes.blob();
     const selfieBlob = toBlob(selfie);
 
