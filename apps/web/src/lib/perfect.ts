@@ -411,28 +411,11 @@ function nearestAge(byAge: Map<number, string>, target: number): string {
 export async function runAging(): Promise<AgingResult> {
   const selfie = selfieOrThrow();
   return withCache(`aging:${selfie.hash}`, async () => {
-    const raw = await runFeature<
-      {
-        request_id: number;
-        payload: {
-          file_sets: { src_ids: string[] };
-          actions: Array<{ id: number }>;
-          output_ext: "jpg";
-        };
-      },
-      unknown
-    >(
+    const raw = await runFeature<{ src_file_id: string }, unknown>(
       "aging",
       toBlob(selfie),
       `selfie.jpg`,
-      (file_id) => ({
-        request_id: 0,
-        payload: {
-          file_sets: { src_ids: [file_id] },
-          actions: [{ id: 0 }],
-          output_ext: "jpg",
-        },
-      }),
+      (file_id) => ({ src_file_id: file_id }),
     );
     console.log("[aging] raw response", raw);
     const { byAge, currentAge } = collectAgingPairs(raw);
