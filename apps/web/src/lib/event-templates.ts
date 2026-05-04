@@ -56,7 +56,7 @@ const lip = (
   if (texture === "gloss") palette.gloss = 75;
   return {
     category: "lip_color",
-    shape: { name: "natural" },
+    shape: { name: "original" },
     style: { type: "full" },
     palettes: [palette],
   };
