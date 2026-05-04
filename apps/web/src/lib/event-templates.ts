@@ -30,7 +30,14 @@ export type EventTemplate = {
    */
   makeupEffects: MakeupEffect[];
   makeupLookName: string;
-  garmentId: string;
+  /**
+   * Reference garment photo (same-origin path under apps/web/public/garments/).
+   * Perfect Corp's cloth-v3 transfers the garment from this image onto the selfie.
+   */
+  garmentReferenceUrl: string;
+  /** garment_category enum for cloth-v3, e.g. "full_body", "top", "bottom", "dress". */
+  garmentCategory: string;
+  garmentName: string;
   accessory: { category: "bag" | "jewelry" | "shoes"; itemId: string };
   paletteHint: string[];
 };
@@ -72,7 +79,9 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     hairStyleName: "Loose Waves",
     makeupLookName: "Ember Glow",
     makeupEffects: [lip("#7a1a2b", "gloss", 85)],
-    garmentId: "slip_dress_burgundy",
+    garmentReferenceUrl: "/garments/date.jpg",
+    garmentCategory: "full_body",
+    garmentName: "Slip Dress",
     accessory: { category: "jewelry", itemId: "gold_hoops_md" },
     paletteHint: ["#7a1a2b", "#c46a6a", "#f7d6c1"],
   },
@@ -85,7 +94,9 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     hairStyleName: "Low Pony",
     makeupLookName: "Clean Neutral",
     makeupEffects: [lip("#a85f4a", "matte", 60)],
-    garmentId: "tailored_blazer_charcoal",
+    garmentReferenceUrl: "/garments/interview.jpg",
+    garmentCategory: "full_body",
+    garmentName: "Tailored Blazer",
     accessory: { category: "bag", itemId: "structured_tote_black" },
     paletteHint: ["#1a1a1f", "#5e6770", "#e7e3dc"],
   },
@@ -98,7 +109,9 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     hairStyleName: "Soft Updo",
     makeupLookName: "Rose Petal",
     makeupEffects: [lip("#cf6a78", "gloss", 75)],
-    garmentId: "midi_dress_dustyrose",
+    garmentReferenceUrl: "/garments/wedding.jpg",
+    garmentCategory: "full_body",
+    garmentName: "Midi Dress",
     accessory: { category: "shoes", itemId: "block_heel_nude" },
     paletteHint: ["#cf8a8a", "#e6b8a2", "#f5e6da"],
   },
@@ -111,7 +124,9 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     hairStyleName: "Beachy Waves",
     makeupLookName: "Sunlit Bronze",
     makeupEffects: [lip("#c89456", "gloss", 70)],
-    garmentId: "linen_set_white",
+    garmentReferenceUrl: "/garments/vacation.jpg",
+    garmentCategory: "full_body",
+    garmentName: "Linen Set",
     accessory: { category: "bag", itemId: "straw_crossbody" },
     paletteHint: ["#f4d6a8", "#c89456", "#1f6b6f"],
   },
@@ -124,7 +139,9 @@ export const EVENTS: Record<EventKey, EventTemplate> = {
     hairStyleName: "Messy Bun",
     makeupLookName: "Your Skin But Better",
     makeupEffects: [lip("#b08070", "matte", 50)],
-    garmentId: "denim_oversize_set",
+    garmentReferenceUrl: "/garments/casual.jpg",
+    garmentCategory: "full_body",
+    garmentName: "Denim Set",
     accessory: { category: "shoes", itemId: "sneaker_white_low" },
     paletteHint: ["#7a5a3a", "#d8c5b0", "#1c1c1c"],
   },

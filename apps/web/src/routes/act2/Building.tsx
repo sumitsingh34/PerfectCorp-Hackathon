@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useSession } from "@/store/session";
 import { EVENTS } from "@/lib/event-templates";
 import { runHair, runMakeup, runClothes, runAccessory } from "@/lib/perfect";
+import { demoFixture } from "@/lib/demo-fixtures";
 import { speak } from "@/lib/voice";
 
 const STAGES = [
@@ -37,13 +38,27 @@ export default function Building() {
         const makeup = await runMakeup(tpl.makeupEffects, tpl.makeupLookName);
         setMakeup(makeup);
 
+        // Clothes + accessory: Perfect Corp's cloth/bag/jewelry/shoes endpoints
+        // need schemas (and likely reference images) we don't have wired up yet,
+        // so don't fail the whole flow when they error — fall back to demo
+        // fixtures so the user still reaches the lookbook with hair + makeup.
         setStage(2);
-        const clothes = await runClothes(tpl.garmentId);
-        setClothes(clothes);
+        try {
+          const clothes = await runClothes(tpl.garmentReferenceUrl, tpl.garmentCategory, tpl.garmentName);
+          setClothes(clothes);
+        } catch (err) {
+          console.warn("[act2] clothes stage skipped:", err);
+          setClothes(demoFixture("clothes:fallback") as ReturnType<typeof useSession.getState>["clothes"]);
+        }
 
         setStage(3);
-        const acc = await runAccessory(tpl.accessory.category, tpl.accessory.itemId);
-        setAccessory(acc);
+        try {
+          const acc = await runAccessory(tpl.accessory.category, tpl.accessory.itemId);
+          setAccessory(acc);
+        } catch (err) {
+          console.warn("[act2] accessory stage skipped:", err);
+          setAccessory(demoFixture("acc:fallback") as ReturnType<typeof useSession.getState>["accessory"]);
+        }
 
         nav("/lookbook");
       } catch (e: unknown) {

@@ -555,19 +555,54 @@ export async function runHair(refImageUrl: string, styleName: string): Promise<H
   });
 }
 
-export async function runClothes(garmentId: string): Promise<ClothesResult> {
+/**
+ * cloth-v3 needs the source selfie + a reference garment image + a category.
+ * Same two-upload flow as hair-transfer: fetch the static garment asset,
+ * upload both files, run the task with both file_ids.
+ */
+export async function runClothes(
+  refGarmentUrl: string,
+  garmentCategory: string,
+  garmentName: string,
+): Promise<ClothesResult> {
   const selfie = selfieOrThrow();
-  return withCache(`clothes:${selfie.hash}:${garmentId}`, async () => {
-    const raw = await runFeature<{ src_file_id: string; garment_id: string }, unknown>(
-      "clothes-vto",
-      toBlob(selfie),
-      `selfie.jpg`,
-      (file_id) => ({ src_file_id: file_id, garment_id: garmentId }),
-    );
+  return withCache(`clothes:${selfie.hash}:${refGarmentUrl}:${garmentCategory}`, async () => {
+    const refRes = await fetch(refGarmentUrl);
+    if (!refRes.ok) {
+      throw new Error(`clothes: failed to fetch reference garment ${refGarmentUrl} (${refRes.status})`);
+    }
+    const refContentType = refRes.headers.get("content-type") || "";
+    if (!refContentType.startsWith("image/")) {
+      throw new Error(
+        `clothes: reference garment not found at ${refGarmentUrl} ` +
+          `(got content-type "${refContentType}"). ` +
+          `Drop a real JPG at apps/web/public${refGarmentUrl}.`,
+      );
+    }
+    const refBlob = await refRes.blob();
+    const selfieBlob = toBlob(selfie);
+
+    const srcUpload = await requestUpload("cloth-v3", [
+      { content_type: selfieBlob.type, file_name: "selfie.jpg", file_size: selfieBlob.size },
+    ]);
+    const refUpload = await requestUpload("cloth-v3", [
+      { content_type: refBlob.type, file_name: "garment.jpg", file_size: refBlob.size },
+    ]);
+    const srcTarget = srcUpload.files[0];
+    const refTarget = refUpload.files[0];
+
+    await Promise.all([uploadBlob(srcTarget, selfieBlob), uploadBlob(refTarget, refBlob)]);
+
+    const { task_id } = await createTask("cloth-v3", {
+      src_file_id: srcTarget.file_id,
+      ref_file_id: refTarget.file_id,
+      garment_category: garmentCategory,
+    });
+    const raw = await pollTask("cloth-v3", task_id);
     const p = pickFeaturePayload(raw, ["image_url", "result_url", "url", "garment_name"]);
     return {
       previewUrl: strField(p, "image_url", "result_url", "url") || "",
-      garmentName: strField(p, "garment_name") || garmentId,
+      garmentName: strField(p, "garment_name") || garmentName,
     };
   });
 }

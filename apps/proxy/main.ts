@@ -61,7 +61,7 @@ const FEATURES: Record<string, { version: "v1.0" | "v2.0" }> = {
   "skin-tone-analysis": { version: "v2.0" },
   "skin-simulation": { version: "v2.0" },
   "makeup-vto": { version: "v2.0" },
-  "clothes-vto": { version: "v2.0" },
+  "cloth-v3": { version: "v2.0" },
   "bag-vto": { version: "v2.0" },
   "jewelry-vto": { version: "v2.0" },
   "shoes-vto": { version: "v2.0" },
