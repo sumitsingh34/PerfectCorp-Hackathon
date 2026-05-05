@@ -48,8 +48,9 @@ export default function Share() {
       await exportCard(cardRef.current);
       toast("Saved · check your downloads");
     } catch (e) {
-      console.error(e);
-      toast("Couldn't save. Try the Share button instead.");
+      console.error("[share] save failed:", e);
+      const detail = e instanceof Error ? e.message.slice(0, 80) : "unknown error";
+      toast(`Couldn't save · ${detail}`);
     } finally { setBusy(false); }
   }
 

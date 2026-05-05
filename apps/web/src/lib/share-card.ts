@@ -1,7 +1,43 @@
 import { toPng } from "html-to-image";
 
+/**
+ * Fetch a remote image and return a data URL. Used to swap cross-origin
+ * `<img src>` values in the share card before snapshotting — html-to-image
+ * taints the canvas when images come from origins without CORS headers
+ * (e.g. Perfect Corp's S3 result URLs), which makes toPng throw.
+ */
+async function urlToDataUrl(url: string): Promise<string> {
+  if (!url || url.startsWith("data:")) return url;
+  const res = await fetch(url, { mode: "cors" });
+  if (!res.ok) throw new Error(`fetch image failed (${res.status}): ${url}`);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function inlineImages(node: HTMLElement): Promise<void> {
+  const imgs = Array.from(node.querySelectorAll("img"));
+  await Promise.all(imgs.map(async (img) => {
+    const src = img.getAttribute("src");
+    if (!src || src.startsWith("data:")) return;
+    try {
+      const dataUrl = await urlToDataUrl(src);
+      img.setAttribute("src", dataUrl);
+      // Wait until the browser has decoded the new src so the snapshot includes it.
+      await img.decode().catch(() => undefined);
+    } catch (err) {
+      console.warn("[share-card] failed to inline image, leaving as-is:", src, err);
+    }
+  }));
+}
+
 async function nodeToPng(node: HTMLElement): Promise<string> {
-  // Wait for any in-progress images to settle so the canvas snapshot is complete.
+  await inlineImages(node);
+  // Belt-and-braces: wait for any still-loading <img> to settle.
   const imgs = Array.from(node.querySelectorAll("img"));
   await Promise.all(
     imgs.map((img) =>
@@ -14,6 +50,7 @@ async function nodeToPng(node: HTMLElement): Promise<string> {
     pixelRatio: 2,
     backgroundColor: "#0a0a0f",
     skipFonts: false,
+    cacheBust: true,
   });
 }
 
