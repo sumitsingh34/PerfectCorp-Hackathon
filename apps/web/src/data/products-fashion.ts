@@ -14,39 +14,35 @@ export type FashionItem = {
   price: number;
 };
 
-const COMMON_MAKEUP = (lookId: string): FashionItem => ({
-  id: `lip-${lookId}`, brand: "Bloom", name: "Satin Lip — " + lookId.replace(/_/g, " "), category: "makeup", hero: "💄", price: 24,
-});
-
 export const FASHION_LOOKS: Record<EventKey, FashionItem[]> = {
   date: [
-    { id: "h-date", brand: "Wave",   name: "Heat Curl Spray",                  category: "hair",      hero: "💇‍♀️", price: 18 },
-    COMMON_MAKEUP("ember_glow"),
-    { id: "g-date", brand: "Edna",   name: "Burgundy Slip Dress",              category: "outfit",    hero: "👗", price: 128 },
-    { id: "a-date", brand: "Auric",  name: "14k Hoops",                        category: "accessory", hero: "💍", price: 86 },
+    { id: "h-date", brand: "Wave",   name: "Texturizing Pomade",               category: "hair",      hero: "💆", price: 18 },
+    { id: "m-date", brand: "Bloom",  name: "Tinted Lip Balm",                  category: "makeup",    hero: "🧴", price: 14 },
+    { id: "g-date", brand: "Edna",   name: "Black Linen Shirt",                category: "outfit",    hero: "👔", price: 128 },
+    { id: "a-date", brand: "Auric",  name: "Leather Strap Watch",              category: "accessory", hero: "⌚", price: 186 },
   ],
   interview: [
-    { id: "h-int",  brand: "Polish", name: "Smoothing Serum",                  category: "hair",      hero: "💇‍♀️", price: 22 },
-    COMMON_MAKEUP("clean_neutral"),
+    { id: "h-int",  brand: "Polish", name: "Grooming Pomade",                  category: "hair",      hero: "💆", price: 22 },
+    { id: "m-int",  brand: "Bloom",  name: "Beard + Skin Balm",                category: "makeup",    hero: "🧴", price: 28 },
     { id: "g-int",  brand: "Edna",   name: "Charcoal Tailored Blazer",         category: "outfit",    hero: "🧥", price: 220 },
-    { id: "a-int",  brand: "Bay",    name: "Structured Leather Tote",          category: "accessory", hero: "👜", price: 165 },
+    { id: "a-int",  brand: "Bay",    name: "Leather Briefcase",                category: "accessory", hero: "💼", price: 215 },
   ],
   wedding: [
-    { id: "h-wed",  brand: "Wave",   name: "Hold + Shine Spray",               category: "hair",      hero: "💇‍♀️", price: 19 },
-    COMMON_MAKEUP("rose_petal"),
-    { id: "g-wed",  brand: "Edna",   name: "Dusty Rose Midi",                  category: "outfit",    hero: "👗", price: 178 },
-    { id: "a-wed",  brand: "Step",   name: "Nude Block Heel",                  category: "accessory", hero: "👠", price: 142 },
+    { id: "h-wed",  brand: "Wave",   name: "Shine + Hold Cream",               category: "hair",      hero: "💆", price: 19 },
+    { id: "m-wed",  brand: "Bloom",  name: "Hydrating Face Mist",              category: "makeup",    hero: "🧴", price: 24 },
+    { id: "g-wed",  brand: "Edna",   name: "Slim Fit Dress Shirt",             category: "outfit",    hero: "👔", price: 95 },
+    { id: "a-wed",  brand: "Step",   name: "Brown Oxford Shoes",               category: "accessory", hero: "👞", price: 178 },
   ],
   vacation: [
-    { id: "h-vac",  brand: "Wave",   name: "Sea Salt Spray",                   category: "hair",      hero: "💇‍♀️", price: 16 },
-    COMMON_MAKEUP("sunlit_bronze"),
-    { id: "g-vac",  brand: "Edna",   name: "White Linen Set",                  category: "outfit",    hero: "👚", price: 158 },
-    { id: "a-vac",  brand: "Bay",    name: "Straw Crossbody",                  category: "accessory", hero: "👜", price: 78 },
+    { id: "h-vac",  brand: "Wave",   name: "Sea Salt Spray",                   category: "hair",      hero: "💆", price: 16 },
+    { id: "m-vac",  brand: "Bloom",  name: "SPF 50 Face Cream",                category: "makeup",    hero: "🧴", price: 22 },
+    { id: "g-vac",  brand: "Edna",   name: "Linen Camp Shirt",                 category: "outfit",    hero: "👕", price: 95 },
+    { id: "a-vac",  brand: "Step",   name: "Leather Sandals",                  category: "accessory", hero: "👡", price: 78 },
   ],
   casual: [
-    { id: "h-cas",  brand: "Wave",   name: "Texture Cream",                    category: "hair",      hero: "💇‍♀️", price: 14 },
-    COMMON_MAKEUP("your_skin_better"),
-    { id: "g-cas",  brand: "Edna",   name: "Oversize Denim Set",               category: "outfit",    hero: "👖", price: 124 },
+    { id: "h-cas",  brand: "Wave",   name: "Matte Texture Clay",               category: "hair",      hero: "💆", price: 14 },
+    { id: "m-cas",  brand: "Bloom",  name: "Daily Moisturizer",                category: "makeup",    hero: "🧴", price: 18 },
+    { id: "g-cas",  brand: "Edna",   name: "Premium Cotton Tee",               category: "outfit",    hero: "👕", price: 48 },
     { id: "a-cas",  brand: "Step",   name: "White Low Sneaker",                category: "accessory", hero: "👟", price: 95 },
   ],
 };

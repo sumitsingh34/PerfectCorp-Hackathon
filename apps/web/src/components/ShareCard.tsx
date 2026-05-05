@@ -20,9 +20,9 @@ const ShareCard = forwardRef<HTMLDivElement, {
     >
       <div className="h-full w-full rounded-[28px] bg-gradient-aurora p-1 overflow-hidden">
         <div className="h-full w-full rounded-[24px] bg-ink-900/85 backdrop-blur-xl p-5 flex flex-col gap-4">
-          <header className="flex items-center justify-between">
-            <div className="display text-2xl">Glow Forecast</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/65">
+          <header className="flex items-center justify-between gap-3">
+            <div className="display text-2xl whitespace-nowrap">Glow Forecast</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-white/65 text-right whitespace-nowrap">
               powered by perfect corp
             </div>
           </header>

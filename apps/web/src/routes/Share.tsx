@@ -28,7 +28,15 @@ export default function Share() {
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
   }, []);
-  const { skinAnalysis, aging, skinSimulation, clothes, event } = useSession();
+  const { skinAnalysis, aging, skinSimulation, hair, makeup, clothes, accessory, selfie, event } = useSession();
+
+  // Pick the best "Today You" preview: prefer the most-transformed real result,
+  // skip any demo SVG fallback (which lives under /demo/ and would render as a
+  // generic placeholder figure, not the user's actual face).
+  const isReal = (url?: string) => !!url && !url.startsWith("/demo/");
+  const todayLook =
+    [accessory?.previewUrl, clothes?.previewUrl, makeup?.previewUrl, hair?.previewUrl].find(isReal)
+    ?? selfie?.previewUrl;
 
   const concernLabels =
     skinAnalysis?.top3.map((k) => skinAnalysis.concerns.find((c) => c.key === k)?.label || k) ?? [];
@@ -74,7 +82,7 @@ export default function Share() {
             ref={cardRef}
             futureLeft={aging?.age10Url}
             futureRight={skinSimulation?.improvedUrl}
-            todayLook={clothes?.previewUrl}
+            todayLook={todayLook}
             topConcernLabels={concernLabels}
             eventTitle={event ? EVENTS[event].title : undefined}
           />
